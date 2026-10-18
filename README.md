@@ -1,7 +1,7 @@
 # Sistema de gestión y logística de árbitros de baloncesto
 
 Aplicación para la gestión de árbitros, calendario de partidos y asignación/logística
-de colegiados a partir de la carga de calendarios en formato Excel.
+de colegiados a partir de la carga de calendarios en formato Excel
 
 ## Stack
 
