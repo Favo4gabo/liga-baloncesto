@@ -57,8 +57,9 @@ de colegiados a partir de la carga de calendarios en formato Excel
 Copia `.env.example` a `.env` y ajusta las credenciales. Docker Compose lee
 ese fichero para sustituir las variables (`DB_USER`, `DB_PASSWORD`, `DB_NAME`,
 `DB_PORT`, `DATABASE_URL`, `SECRET_KEY`, `VITE_API_URL`, `VISION_PROVIDER`,
-`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL` y
-`BOT_WEBHOOK_TOKEN`).
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `BOT_WEBHOOK_TOKEN`, `FRONTEND_ORIGINS`,
+`COOKIE_SECURE`, `BCV_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`,
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS`).
 
 ```bash
 cp .env.example .env
@@ -73,15 +74,16 @@ Con Docker Desktop abierto, desde PowerShell y en la raíz del proyecto ejecuta:
 ```
 
 El comando crea `.env` si hace falta, construye e inicia los contenedores,
-espera a que MariaDB y la API estén listos, genera/importa la plantilla de demo
-solo si la base está vacía y abre `http://localhost:5173`.
+espera a que MariaDB y la API estén listos y abre `http://localhost:5173`.
+En una base nueva todavía no existen cuentas: crea los dos superadministradores
+con el procedimiento de abajo y carga después el libro maestro desde la interfaz.
 
 Comandos frecuentes:
 
 ```powershell
 .\scripts\dev.ps1 logs backend  # logs del backend (también frontend o db)
 .\scripts\dev.ps1 status        # estado de servicios
-.\scripts\dev.ps1 reset         # borra datos locales y recrea la demo
+  .\scripts\dev.ps1 reset         # borra datos y vuelve a la pantalla de login
 .\scripts\dev.ps1 help          # lista completa
 ```
 
@@ -91,6 +93,25 @@ En Linux, macOS, Git Bash o WSL puede usarse el Makefile equivalente:
 make demo
 make help
 ```
+
+### Primer acceso y cuentas propietarias
+
+Con los contenedores activos, ejecuta dos veces este comando (una cuenta por
+cada propietario). La terminal pedirá correo, nombre y contraseña; la contraseña
+no se muestra mientras se escribe:
+
+```bash
+docker compose exec backend flask create-superadmin
+docker compose exec backend flask create-superadmin
+```
+
+Inicia sesión en `http://localhost:5173`. Luego importa el Excel de demostración
+o tu libro desde **Importar archivos**. Un superadministrador puede crear los
+perfiles admin, contable y consulta desde **Usuarios y permisos**.
+
+Si se usa `make reset` o `scripts/dev.ps1 reset`, se borra también la tabla de
+usuarios junto con el volumen de datos; se deberán crear de nuevo los dos
+superadministradores.
 
 ### Probar el bot de Telegram
 
@@ -153,7 +174,7 @@ Si no tienes Docker, hay un script equivalente que levanta backend y frontend
 directamente sobre tu máquina usando SQLite y el entorno virtual `.venv`:
 
 ```powershell
-.\scripts\dev-local.ps1              # arranca todo, carga la demo si falta y abre la app
+  .\scripts\dev-local.ps1              # arranca los servicios locales y abre la app
 .\scripts\dev-local.ps1 status       # estado de los servicios locales
 .\scripts\dev-local.ps1 logs frontend
 .\scripts\dev-local.ps1 stop         # detiene sin borrar datos
@@ -341,6 +362,62 @@ Endpoints nuevos:
 | `POST` | `/api/horarios/confirmar` | Inserta las filas revisadas por una persona. JSON: `{ "filas": [...] }`. |
 | `POST` | `/api/bot/webhook` | Actualiza el estado arbitral; requiere `X-Bot-Token`. |
 | `GET` | `/api/historial` | Consulta bitácora con filtros y paginación. |
+
+## Cuentas y permisos
+
+La API y la interfaz requieren una sesión autenticada. Los perfiles son:
+
+| Perfil | Capacidades |
+| --- | --- |
+| `super_admin` | Propietarios: acceso completo, administra usuarios, roles y bloqueo de cuentas. Se crean como máximo dos. |
+| `admin` | Gestiona árbitros, canchas, importaciones, partidos y asignaciones. |
+| `accountant` | Consulta finanzas, registra/anula gastos reales y descarga informes. No administra la liga. |
+| `viewer` | Consulta la aplicación; no modifica datos ni descarga informes. |
+
+En el primer arranque, crea de forma interactiva las dos cuentas propietarias:
+
+```bash
+docker compose exec backend flask create-superadmin
+docker compose exec backend flask create-superadmin
+```
+
+El comando solicita correo, nombre y contraseña sin mostrarla mientras se escribe.
+Las contraseñas se almacenan como hash y no son recuperables en texto plano. Un
+superadministrador puede emitir una clave temporal de un solo uso para otra
+cuenta; el usuario debe reemplazarla al iniciar sesión. El comando
+`docker compose exec backend flask reset-user-password correo@ejemplo.com`
+permite recuperar una cuenta desde una terminal operativa.
+
+Las cookies de sesión son HttpOnly y las operaciones de escritura requieren CSRF.
+En producción configura `SECRET_KEY`, `COOKIE_SECURE=true` y los orígenes HTTPS
+permitidos en `FRONTEND_ORIGINS`.
+
+## Finanzas, gastos reales e informes
+
+Los importes de tarifas se interpretan como presupuesto en USD. La vista de
+finanzas muestra presupuesto por asignación, gastos reales y variación por
+categoría. El perfil contable, administración y superadministración pueden
+registrar o anular gastos reales con categoría, fecha, moneda y referencia; las
+anulaciones quedan auditadas. Los informes Excel/PDF se agrupan por árbitro,
+partido, ciudad o temporada. Los perfiles viewer pueden consultar, pero no
+descargar.
+
+Para gastos reales en VES debe existir una tasa BCV guardada para la fecha del
+gasto. Administración puede solicitar la tasa publicada hoy o registrar una
+tasa histórica verificada. El portal público del BCV no garantiza un endpoint
+API estable: si la consulta automática falla, la pantalla informa del error y
+se registra manualmente la cotización oficial; no se estima ni inventa.
+
+Por decisión del alcance actual, **no se marca un pago como realizado desde la
+aplicación, no se cierra nómina y no se envían correos de pago/nómina**. Los
+estados de pagos heredados se conservan para consulta, pero el endpoint rechaza
+intentos de modificarlos. Las notificaciones SMTP existentes se limitan a los
+eventos operativos ya soportados.
+
+La conversión VES usa la tasa efectiva en la fecha del gasto real. Para el
+presupuesto estimado usa la tasa del día del partido; los partidos futuros se
+marcan como estimados con la tasa más reciente disponible. Las filas sin tasa
+histórica permanecen sin conversión hasta registrar la tasa oficial.
 
 ## Notas de desarrollo
 

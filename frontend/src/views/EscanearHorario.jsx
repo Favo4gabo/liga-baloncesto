@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
 
 const acceptedFiles = '.xlsx,.csv,.png,.jpg,.jpeg'
 
-export default function EscanearHorario({ embedded = false }) {
+export default function EscanearHorario({
+  embedded = false,
+  initialFile = null,
+  hideUploader = false,
+  autoAnalyze = false,
+  onAnalysisError,
+  onAnalysisComplete,
+}) {
   const inputRef = useRef(null)
-  const [file, setFile] = useState(null)
+  const autoAnalyzed = useRef(false)
+  const [file, setFile] = useState(initialFile)
   const [filas, setFilas] = useState([])
   const [ciudades, setCiudades] = useState([])
   const [arbitros, setArbitros] = useState([])
@@ -20,9 +28,9 @@ export default function EscanearHorario({ embedded = false }) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/catalogos/ciudades`),
-      fetch(`${API_URL}/arbitros/`),
-      fetch(`${API_URL}/catalogos/canchas`),
+      apiFetch('/catalogos/ciudades'),
+      apiFetch('/arbitros/'),
+      apiFetch('/catalogos/canchas'),
     ]).then(async ([cityResponse, refereeResponse, venueResponse]) => {
       if (![cityResponse, refereeResponse, venueResponse].every((response) => response.ok)) throw new Error('No se pudieron cargar los catálogos.')
       const [cityList, refereeList, venueList] = await Promise.all([cityResponse.json(), refereeResponse.json(), venueResponse.json()])
@@ -31,6 +39,12 @@ export default function EscanearHorario({ embedded = false }) {
       setCanchas(venueList)
     }).catch((err) => setError(err.message)).finally(() => setLoadingCatalogs(false))
   }, [])
+
+  useEffect(() => {
+    if (!autoAnalyze || !initialFile || loadingCatalogs || autoAnalyzed.current) return
+    autoAnalyzed.current = true
+    scan({ preventDefault() {} })
+  }, [autoAnalyze, initialFile, loadingCatalogs])
 
   function selectFile(selected) {
     setFile(selected || null)
@@ -48,16 +62,18 @@ export default function EscanearHorario({ embedded = false }) {
     try {
       const body = new FormData()
       body.append('file', file)
-      const response = await fetch(`${API_URL}/horarios/escanear`, { method: 'POST', body })
+      const response = await apiFetch('/horarios/escanear', { method: 'POST', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'No se pudo leer el horario.')
       setFilas(data.filas || [])
       setAdvertencias(data.advertencias || [])
       setProvider(data.modelo ? `${data.origen} · ${data.modelo}` : data.origen || '')
       if (!(data.filas || []).length) throw new Error('El lector no encontró filas. Revisa el archivo e inténtalo de nuevo.')
+      onAnalysisComplete?.(data)
     } catch (err) {
       setError(err.message)
       setFilas([])
+      onAnalysisError?.(err.message)
     } finally {
       setScanning(false)
     }
@@ -78,7 +94,7 @@ export default function EscanearHorario({ embedded = false }) {
     setError('')
     setResultado(null)
     try {
-      const response = await fetch(`${API_URL}/horarios/confirmar`, {
+      const response = await apiFetch('/horarios/confirmar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filas: filas.map((row) => ({
@@ -112,7 +128,7 @@ export default function EscanearHorario({ embedded = false }) {
     {error && <div className="error-notice" role="alert">{error}</div>}
     {resultado && <div className="success-notice" role="status">✓ {resultado.mensaje} Se crearon {resultado.partidos_nuevos} partidos y {resultado.asignaciones_nuevas} asignaciones.</div>}
 
-    <section className="panel schedule-upload-panel">
+    {!hideUploader && <section className="panel schedule-upload-panel">
       <form onSubmit={scan}>
         <div className="schedule-dropzone" role="button" tabIndex="0" onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click() }} onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
           <span className="schedule-upload-icon" aria-hidden="true">↥</span>
@@ -126,7 +142,7 @@ export default function EscanearHorario({ embedded = false }) {
         </div>
       </form>
       {loadingCatalogs && <p className="schedule-muted">Cargando catálogos…</p>}
-    </section>
+    </section>}
 
     {advertencias.map((warning, index) => <div className="schedule-warning" key={`${warning}-${index}`}>{warning}</div>)}
     {filas.length > 0 && <section className="panel schedule-preview-panel">

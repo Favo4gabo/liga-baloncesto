@@ -10,7 +10,7 @@ help: ## Muestra los comandos disponibles
 	@echo "ArbiLiga - comandos de desarrollo"
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-14s %s\n", $$1, $$2}'
 
-demo: up seed open ## Arranca todo, carga datos si no existen y abre la aplicación
+demo: up open ## Arranca todo y abre la aplicación
 
 init-env: ## Crea .env desde .env.example si todavía no existe
 	@test -f .env || cp .env.example .env
@@ -48,18 +48,16 @@ shell-db: ## Abre el cliente MariaDB dentro de la base de datos
 plantilla: ## Genera backend/plantilla_liga.xlsx
 	$(COMPOSE) exec -T backend python scripts/generar_plantilla.py /app/plantilla_liga.xlsx
 
-import: plantilla ## Importa la plantilla a través de la API
-	curl -fsS -X POST -F "file=@$(PLANTILLA)" $(API)/upload-excel
-	@echo
+import: plantilla ## Indica cómo importar la plantilla tras iniciar sesión
+	@echo "La API requiere autenticación. Inicia sesión como super_admin y carga $(PLANTILLA) desde /importar."
 
-seed: ## Carga la plantilla solo cuando todavía no hay partidos
-	@total=$$(curl -fsS $(API)/partidos | grep -o '"id"' | wc -l); if [ "$$total" -eq 0 ]; then $(MAKE) import; else echo "Ya existen $$total partido(s); se omite la importación para evitar duplicados."; fi
+seed: plantilla ## Genera datos de demo; la importación se confirma desde la interfaz autenticada
+	@echo "La plantilla está en $(PLANTILLA). Inicia sesión y cárgala desde /importar."
 
 api: ## Comprueba salud y muestra los partidos registrados
 	curl -fsS $(API)/health
 	@echo
-	curl -fsS $(API)/partidos
-	@echo
+	@echo "Las rutas de datos requieren una sesión iniciada; consulta los partidos desde la aplicación."
 
 open: ## Abre el frontend en el navegador (Windows, macOS o Linux)
 	@{ command -v xdg-open >/dev/null && xdg-open http://localhost:5173; } || { command -v open >/dev/null && open http://localhost:5173; } || { command -v cmd.exe >/dev/null && cmd.exe /c start http://localhost:5173; } || true

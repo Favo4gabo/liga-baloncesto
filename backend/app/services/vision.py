@@ -183,7 +183,8 @@ def extraer_filas_excel_texto(texto_libro: str) -> dict:
         raise ValueError("La IA está en modo simulado; se usará la detección local del Excel.")
 
     prompt = f"""
-Analiza el contenido completo de este libro de Excel. Puede tener varias hojas o
+Analiza el contenido tabular completo de este archivo. Puede ser un libro de Excel
+con varias hojas o un CSV con
 varias tablas separadas en una misma hoja, con títulos, filas vacías y nombres de
 columnas no estandarizados. Identifica las filas de partidos/horarios y usa las
 otras tablas (árbitros, ciudades, sedes, tarifas y viáticos) únicamente para

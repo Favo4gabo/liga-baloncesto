@@ -15,16 +15,16 @@ function Write-Ayuda {
   @'
 ArbiLiga - arranque local
 
-  .\scripts\dev.ps1                 Arranca, carga la demo si está vacía y abre la aplicación
+  .\scripts\dev.ps1                 Arranca los servicios y abre la aplicación
   .\scripts\dev.ps1 up              Construye, levanta y espera los servicios
   .\scripts\dev.ps1 logs backend    Logs de backend (también frontend o db)
   .\scripts\dev.ps1 plantilla       Genera el Excel de muestra
-  .\scripts\dev.ps1 import          Sube el Excel de muestra a la API
-  .\scripts\dev.ps1 seed            Importa solo si no existen partidos
+  .\scripts\dev.ps1 import          Genera la plantilla y muestra cómo importarla autenticado
+  .\scripts\dev.ps1 seed            Genera la plantilla sin saltarse el login
   .\scripts\dev.ps1 status          Estado de los contenedores
-  .\scripts\dev.ps1 api             Comprueba API y lista partidos
+  .\scripts\dev.ps1 api             Comprueba la API pública de salud
   .\scripts\dev.ps1 stop            Detiene sin borrar datos
-  .\scripts\dev.ps1 reset           Borra datos y recrea la demo
+  .\scripts\dev.ps1 reset           Borra datos y vuelve a la pantalla de inicio de sesión
 '@ | Write-Host
 }
 
@@ -62,8 +62,8 @@ function Wait-Services {
 
 function Invoke-Up { Assert-Docker; Initialize-Environment; Invoke-Compose @('up', '--build', '-d'); Wait-Services }
 function Invoke-Plantilla { Invoke-Compose @('exec', '-T', 'backend', 'python', 'scripts/generar_plantilla.py', '/app/plantilla_liga.xlsx') }
-function Invoke-Import { if (-not (Test-Path $Plantilla)) { Invoke-Plantilla }; & curl.exe -fsS -X POST -F "file=@$Plantilla" "$Api/upload-excel"; if ($LASTEXITCODE -ne 0) { throw 'No se pudo importar la plantilla.' }; Write-Host }
-function Invoke-Seed { $partidos = @(Invoke-RestMethod "$Api/partidos"); if ($partidos.Count -eq 0) { Invoke-Import } else { Write-Host "Ya existen $($partidos.Count) partido(s); se omite la importación para evitar duplicados." } }
+function Invoke-Import { if (-not (Test-Path $Plantilla)) { Invoke-Plantilla }; Write-Host "Plantilla lista en $Plantilla. Inicia sesión como super_admin y cárgala desde http://localhost:5173/importar?tipo=libro." }
+function Invoke-Seed { Invoke-Import }
 
 Push-Location $Raiz
 try {
@@ -75,11 +75,11 @@ try {
     'plantilla' { Assert-Docker; Invoke-Plantilla }
     'import' { Assert-Docker; Invoke-Import }
     'seed' { Assert-Docker; Invoke-Seed }
-    'api' { Invoke-RestMethod "$Api/health" | ConvertTo-Json; Invoke-RestMethod "$Api/partidos" | ConvertTo-Json -Depth 8 }
+    'api' { Invoke-RestMethod "$Api/health" | ConvertTo-Json }
     'open' { Start-Process 'http://localhost:5173' }
     'stop' { Assert-Docker; Invoke-Compose @('down') }
     'restart' { Assert-Docker; Invoke-Compose @('down'); Invoke-Up }
-    'reset' { Assert-Docker; if ((Read-Host 'Esto borrará la base de datos local. ¿Continuar? [s/N]') -notmatch '^[sS]$') { return }; Invoke-Compose @('down', '-v'); Invoke-Up; Invoke-Seed; Start-Process 'http://localhost:5173' }
-    'demo' { Invoke-Up; Invoke-Seed; Start-Process 'http://localhost:5173' }
+    'reset' { Assert-Docker; if ((Read-Host 'Esto borrará la base de datos local. ¿Continuar? [s/N]') -notmatch '^[sS]$') { return }; Invoke-Compose @('down', '-v'); Invoke-Up; Start-Process 'http://localhost:5173' }
+    'demo' { Invoke-Up; Start-Process 'http://localhost:5173' }
   }
 } finally { Pop-Location }

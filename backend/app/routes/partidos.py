@@ -2,11 +2,12 @@
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from ..authz import roles_required
 from ..database import db
-from ..models import ARBITROS_POR_PARTIDO, Arbitro, AsignacionPartido, Ciudad, ESTADOS_PAGO, ESTADOS_VIAJE, Partido
+from ..models import ARBITROS_POR_PARTIDO, Arbitro, AsignacionPartido, Ciudad, ESTADOS_VIAJE, Partido
 from ..services.asignaciones import AsignacionError, crear_asignacion, reemplazar_arbitro_asignacion
 from ..services.calculator import calcular_viaticos_asignacion
 from ..services.notifications import registrar_y_enviar_evento
@@ -28,6 +29,7 @@ def listar_partidos():
 
 
 @bp.post("/partidos")
+@roles_required("super_admin", "admin")
 def crear_partido():
     datos = request.get_json(silent=True) or {}
     requeridos = ("fecha_hora", "estadio_cancha", "ciudad_juego_id")
@@ -67,6 +69,7 @@ def calcular_costos_partido(partido_id):
             datos.get("cantidad_noches", 1),
             datos.get("cantidad_dias", 1),
             datos.get("medio_transporte") or None,
+            datos.get("viatico_por_dia"),
         )
         return jsonify(costos), 200
     except ValueError as error:
@@ -74,6 +77,7 @@ def calcular_costos_partido(partido_id):
 
 
 @bp.post("/partidos/<int:partido_id>/asignar")
+@roles_required("super_admin", "admin")
 def asignar_arbitro(partido_id):
     datos = request.get_json(silent=True) or {}
     try:
@@ -84,6 +88,7 @@ def asignar_arbitro(partido_id):
 
 
 @bp.put("/asignaciones/<int:asignacion_id>/arbitro")
+@roles_required("super_admin", "admin")
 def actualizar_arbitro_asignacion(asignacion_id):
     datos = request.get_json(silent=True) or {}
     arbitro_id = datos.get("arbitro_id")
@@ -105,12 +110,14 @@ def actualizar_estado_asignacion(asignacion_id):
     datos = request.get_json(silent=True) or {}
     estado_viaje = datos.get("estado_viaje")
     estado_pago = datos.get("estado_pago")
+    if estado_pago is not None:
+        return jsonify({"error": "El registro/actualización de pagos no está habilitado en esta versión."}), 409
+    if g.current_user.rol not in {"super_admin", "admin"}:
+        return jsonify({"error": "Solo administración puede actualizar el estado del viaje."}), 403
     if estado_viaje is not None and estado_viaje not in ESTADOS_VIAJE:
         return jsonify({"error": "estado_viaje no válido."}), 400
-    if estado_pago is not None and estado_pago not in ESTADOS_PAGO:
-        return jsonify({"error": "estado_pago no válido."}), 400
-    if estado_viaje is None and estado_pago is None:
-        return jsonify({"error": "Indique estado_viaje o estado_pago."}), 400
+    if estado_viaje is None:
+        return jsonify({"error": "Indique un estado_viaje válido."}), 400
     if estado_viaje is not None:
         if estado_viaje == "Finalizado" and len(asignacion.partido.asignaciones) != ARBITROS_POR_PARTIDO:
             return jsonify({"error": f"El partido debe tener {ARBITROS_POR_PARTIDO} árbitros asignados antes de finalizar la participación."}), 409
@@ -120,12 +127,5 @@ def actualizar_estado_asignacion(asignacion_id):
         if estado_viaje in fechas:
             setattr(asignacion, fechas[estado_viaje], datetime.utcnow())
         db.session.add(registrar_y_enviar_evento(asignacion, estado_viaje))
-    if estado_pago is not None:
-        asignacion.estado_pago = estado_pago
-        if estado_pago == "Pagado":
-            pago = asignacion.pago
-            if pago:
-                pago.estado, pago.fecha_pago = "Pagado", datetime.utcnow()
-            db.session.add(registrar_y_enviar_evento(asignacion, "Pago realizado"))
     db.session.commit()
     return jsonify(asignacion.to_dict()), 200

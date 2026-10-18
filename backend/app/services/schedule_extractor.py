@@ -313,7 +313,29 @@ def extraer_horario_arbitro(archivo_o_imagen, filename: str | None = None) -> di
                     ) from error_local
                 raise
     elif extension == ".csv":
-        origen = _normalizar_filas_tabulares(_leer_tabular(bytes(contenido), extension))
+        error_ia = None
+        if os.getenv("VISION_PROVIDER", "simulado").strip().lower() not in {"simulado", "emulado", "local"}:
+            try:
+                texto_csv = bytes(contenido).decode("utf-8-sig", errors="replace")
+                resultado_ia = extraer_filas_excel_texto(f"CONTENIDO DEL CSV:\n{texto_csv}")
+                origen = _filas_desde_ia(resultado_ia)
+                proveedor, modelo = resultado_ia["proveedor"], resultado_ia.get("modelo")
+                advertencias.extend(resultado_ia.get("advertencias", []))
+                if not origen:
+                    raise ValueError("La IA no encontró partidos en el CSV.")
+            except ValueError as error:
+                error_ia = error
+                origen = []
+        else:
+            origen = []
+        if not origen:
+            origen = _normalizar_filas_tabulares(_leer_tabular(bytes(contenido), extension))
+            proveedor, modelo = "lectura local", None
+            if error_ia:
+                advertencias.append(
+                    f"No se pudo usar la IA ({error_ia}). Se aplicó la lectura tabular local. "
+                    "Revisa los campos antes de confirmar."
+                )
     elif extension in {".png", ".jpg", ".jpeg"}:
         mime_type = "image/png" if extension == ".png" else "image/jpeg"
         resultado = extraer_filas_imagen(bytes(contenido), filename or "horario", mime_type)

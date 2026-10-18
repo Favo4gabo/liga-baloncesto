@@ -1,13 +1,17 @@
 import { useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import FormularioAsignacion from './FormularioAsignacion.jsx'
 import CostBreakdown from './CostBreakdown.jsx'
+import RefereeCount from './RefereeCount.jsx'
 
 const textDate = (date) => new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${date}T12:00:00`))
 const time = (value) => new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 const amount = (value) => Number(value || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigned }) {
+  const { user } = useAuth()
+  const canEditAssignments = ['super_admin', 'admin'].includes(user.rol)
   const [editingId, setEditingId] = useState(null)
   const [selectedReferee, setSelectedReferee] = useState('')
   const [editError, setEditError] = useState('')
@@ -42,9 +46,9 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                 </div>
                 <span className="badge-soft">{partido.estado_partido}</span>
               </div>
-              <small className={`required-referees ${partido.asignaciones?.length === 2 ? 'complete' : ''}`}>
-                Árbitros asignados: {partido.asignaciones?.length || 0}/2
-              </small>
+               <div className={`required-referees ${partido.asignaciones?.length === 2 ? 'complete' : ''}`}>
+                 <RefereeCount label="Árbitros asignados:" assignments={partido.asignaciones || []} required={partido.arbitros_requeridos || 2} />
+               </div>
               {partido.asignaciones?.length ? (
                 <div className="assignment-list">
                   {partido.asignaciones.map((asignacion) => {
@@ -55,10 +59,10 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                           <span className="referee-avatar">{asignacion.arbitro?.nombre?.[0]}{asignacion.arbitro?.apellido?.[0]}</span>
                           <div className="referee-hover" title={`Árbitro asignado: ${asignacion.arbitro?.nombre} ${asignacion.arbitro?.apellido}`}>
                             <strong>{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}</strong>
-                            <small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span> · Pago: {asignacion.estado_pago}</small>
+                            <small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span></small>
                           </div>
                         </div>
-                        {editingId === asignacion.id ? (
+                        {canEditAssignments && editingId === asignacion.id ? (
                           <div className="assignment-edit">
                             <select value={selectedReferee} onChange={(event) => setSelectedReferee(event.target.value)}>
                               <option value="">Selecciona un árbitro</option>
@@ -67,7 +71,7 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                             <button type="button" className="btn-primary-custom" disabled={savingEdit || !selectedReferee} onClick={async () => {
                               setSavingEdit(true); setEditError('')
                               try {
-                                const response = await fetch(`${API_URL}/asignaciones/${asignacion.id}/arbitro`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ arbitro_id: Number(selectedReferee) }) })
+                                const response = await apiFetch(`/asignaciones/${asignacion.id}/arbitro`, { method: 'PUT', body: JSON.stringify({ arbitro_id: Number(selectedReferee) }) })
                                 const data = await response.json()
                                 if (!response.ok) throw new Error(data.error || 'No se pudo cambiar el árbitro.')
                                 setEditingId(null); await onAssigned()
@@ -76,7 +80,7 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                             <button type="button" className="assign-cancel" onClick={() => { setEditingId(null); setEditError('') }}>Cancelar</button>
                             {editError && <small className="form-error">{editError}</small>}
                           </div>
-                        ) : <button type="button" className="assignment-edit-button" onClick={() => { setEditingId(asignacion.id); setSelectedReferee(String(asignacion.arbitro_id)); setEditError('') }}>Cambiar árbitro</button>}
+                        ) : canEditAssignments && <button type="button" className="assignment-edit-button" onClick={() => { setEditingId(asignacion.id); setSelectedReferee(String(asignacion.arbitro_id)); setEditError('') }}>Cambiar árbitro</button>}
                         <div className="assignment-route-summary">
                           <span>{asignacion.arbitro?.ciudad_origen?.nombre || 'Origen'} → {partido.ciudad_juego?.nombre || 'Sede'}</span>
                           <span>{trasladoExterno ? `Traslado externo: ${trasladoExterno.medio}` : 'Sin traslado externo'}</span>

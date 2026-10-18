@@ -87,8 +87,8 @@ def _buscar(mapa: dict[str, Any], valor: Any, campo: str) -> Any:
     return registro
 
 
-def procesar_archivo_excel(archivo: bytes | bytearray | BinaryIO) -> dict[str, Any]:
-    """Crea o actualiza los catálogos. Si una fila falla, no se guarda ninguna."""
+def procesar_archivo_excel(archivo: bytes | bytearray | BinaryIO, guardar: bool = True) -> dict[str, Any]:
+    """Valida el libro y opcionalmente lo guarda de forma atómica."""
     origen = BytesIO(archivo) if isinstance(archivo, (bytes, bytearray)) else archivo
     if hasattr(origen, "seek"):
         origen.seek(0)
@@ -194,7 +194,10 @@ def procesar_archivo_excel(archivo: bytes | bytearray | BinaryIO) -> dict[str, A
             db.session.add(Partido(fecha_hora=fecha.to_pydatetime(), estadio_cancha=_texto(fila["estadio_cancha"], "estadio_cancha"),
                                    ciudad_juego=_buscar(ciudades_nombre, fila["ciudad_juego"], "ciudad_juego")))
             resumen["partidos"] += 1
-        db.session.commit()
+        if guardar:
+            db.session.commit()
+        else:
+            db.session.rollback()
         return {"status": "success", "insertados_o_actualizados": resumen}
     except Exception:
         db.session.rollback()

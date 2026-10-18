@@ -43,16 +43,16 @@ function Write-Ayuda {
   @'
 ArbiLiga - arranque local sin Docker (backend Flask + frontend Vite)
 
-  .\scripts\dev-local.ps1                 Arranca todo, carga la demo si está vacía y abre la app
+  .\scripts\dev-local.ps1                 Arranca servicios y abre la app (requiere cuentas)
   .\scripts\dev-local.ps1 backend         Arranca solo el backend en http://localhost:5000
   .\scripts\dev-local.ps1 frontend        Arranca solo el frontend en http://localhost:5173
   .\scripts\dev-local.ps1 status          Estado de los servicios locales
   .\scripts\dev-local.ps1 logs            Sigue los logs de ambos servicios
   .\scripts\dev-local.ps1 logs frontend   Logs de un servicio (backend o frontend)
-  .\scripts\dev-local.ps1 api             Comprueba la API y lista los partidos
+  .\scripts\dev-local.ps1 api             Comprueba el endpoint público de salud
   .\scripts\dev-local.ps1 plantilla       Genera backend/plantilla_liga.xlsx
-  .\scripts\dev-local.ps1 import          Sube la plantilla a la API
-  .\scripts\dev-local.ps1 seed            Importa la plantilla solo si no hay partidos
+  .\scripts\dev-local.ps1 import          Genera la plantilla e indica cómo subirla autenticado
+  .\scripts\dev-local.ps1 seed            Genera la plantilla sin saltarse el login
   .\scripts\dev-local.ps1 stop            Detiene los servicios sin borrar datos
   .\scripts\dev-local.ps1 restart         Reinicia sin borrar datos
   .\scripts\dev-local.ps1 reset           Borra backend/dev.db y recrea la demo
@@ -128,7 +128,7 @@ function Start-Backend {
   $env:DATABASE_URL = Get-DatabaseUrl
 
   $proc = Start-Process -FilePath $py `
-    -ArgumentList @('-m', 'flask', 'run', "--port=$PuertoBack") `
+    -ArgumentList @('-m', 'flask', 'run', '--reload', "--port=$PuertoBack") `
     -WorkingDirectory $DirBack `
     -RedirectStandardOutput (Join-Path $DirRun 'backend.out.log') `
     -RedirectStandardError (Join-Path $DirRun 'backend.err.log') `
@@ -243,18 +243,12 @@ function Invoke-Plantilla {
 }
 
 function Invoke-Import {
-  Wait-Backend
   if (-not (Test-Path $Plantilla)) { Invoke-Plantilla }
-  & curl.exe -fsS -X POST -F "file=@$Plantilla" "$Api/upload-excel"
-  if ($LASTEXITCODE -ne 0) { throw 'No se pudo importar la plantilla.' }
-  Write-Host
+  Write-Host "Plantilla lista en $Plantilla. Inicia sesión como super_admin y cárgala desde $UrlNavegador/importar?tipo=libro."
 }
 
 function Invoke-Seed {
-  Wait-Backend
-  $respuestaPartidos = Invoke-RestMethod "$Api/partidos" -TimeoutSec 10
-  $partidos = @($respuestaPartidos)
-  if ($partidos.Count -eq 0) { Invoke-Import } else { Write-Host "Ya existen $($partidos.Count) partido(s); se omite la importación." }
+  Invoke-Import
 }
 
 function Get-Estatus {
@@ -298,7 +292,6 @@ function Invoke-Start([bool]$AbrirNavegador) {
   Start-Frontend
   Wait-Frontend
   Start-TelegramBot
-  Invoke-Seed
   if ($AbrirNavegador) { Start-Process $UrlNavegador }
 }
 
@@ -314,9 +307,7 @@ try {
     'api' {
       Wait-Backend
       Invoke-RestMethod "$Api/health" -TimeoutSec 10 | ConvertTo-Json -Compress
-      $respuestaPartidos = Invoke-RestMethod "$Api/partidos" -TimeoutSec 10
-      $partidos = @($respuestaPartidos)
-      Write-Host "Partidos registrados: $($partidos.Count)"
+      Write-Host 'Las rutas con datos requieren una sesión autenticada; consulta los registros desde la aplicación.'
     }
     'plantilla' { Invoke-Plantilla }
     'import' { Invoke-Import }

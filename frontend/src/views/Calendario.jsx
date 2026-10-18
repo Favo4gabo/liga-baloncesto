@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/react/daygrid'
 import interactionPlugin from '@fullcalendar/react/interaction'
@@ -8,15 +8,20 @@ import '@fullcalendar/react/skeleton.css'
 import '@fullcalendar/react/themes/classic/theme.css'
 import '@fullcalendar/react/themes/classic/palette.css'
 import PanelDia from '../components/PanelDia.jsx'
+import RefereeCount from '../components/RefereeCount.jsx'
+import MonthPicker from '../components/MonthPicker.jsx'
 import { getCachedLeagueData, loadLeagueData } from '../services/leagueData.js'
 
 const dateKey = (value) => value?.slice(0, 10)
+const localMonth = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
 export default function Calendario() {
+  const calendarRef = useRef(null)
   const cachedData = getCachedLeagueData()
   const [partidos, setPartidos] = useState(() => cachedData?.partidos || [])
   const [arbitros, setArbitros] = useState(() => cachedData?.arbitros || [])
   const [fecha, setFecha] = useState('')
+  const [mes, setMes] = useState(() => cachedData?.partidos?.[0]?.fecha_hora?.slice(0, 7) || localMonth(new Date()))
   const [cargando, setCargando] = useState(!cachedData)
   const [error, setError] = useState('')
 
@@ -39,20 +44,32 @@ export default function Calendario() {
     title: partido.estadio_cancha,
     start: partido.fecha_hora,
     classNames: [`match-${partido.estado_partido.toLowerCase().replaceAll(' ', '-')}`],
-    extendedProps: { fecha: dateKey(partido.fecha_hora), arbitros: partido.asignaciones?.length || 0 },
+    extendedProps: {
+      fecha: dateKey(partido.fecha_hora),
+      arbitros: partido.asignaciones?.length || 0,
+      asignaciones: partido.asignaciones || [],
+    },
   })), [partidos])
 
   const selectDate = (value) => setFecha(value)
+  const selectMonth = (value) => {
+    if (!value) return
+    setMes(value)
+    setFecha('')
+    calendarRef.current?.getApi().gotoDate(`${value}-01`)
+  }
 
   return <>
     <div className="page-heading calendar-heading">
       <div><h2>Calendario de partidos</h2><p>Selecciona un día para consultar sus sedes, árbitros y costos.</p></div>
+      <MonthPicker className="calendar-month-picker" label="Seleccionar mes" value={mes} onChange={selectMonth} />
     </div>
     {error && <div className="error-notice">{error}</div>}
     {cargando ? <div className="loading">Cargando calendario…</div> : (
       <div className="calendar-layout">
         <section className="calendar-card panel">
           <FullCalendar
+            ref={calendarRef}
             plugins={[dayGridPlugin, interactionPlugin, classicThemePlugin]}
             locale={esLocale}
             firstDay={1}
@@ -60,13 +77,17 @@ export default function Calendario() {
             initialDate={fechaInicial}
             headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
             buttonText={{ today: 'Hoy' }}
+            datesSet={(info) => setMes((previous) => {
+              const visibleMonth = localMonth(info.view.currentStart)
+              return previous === visibleMonth ? previous : visibleMonth
+            })}
             events={events}
             height="auto"
             dayMaxEvents={2}
             moreLinkText={(count) => `+${count} partidos`}
             dateClick={(info) => selectDate(info.dateStr)}
             eventClick={(info) => selectDate(info.event.extendedProps.fecha)}
-            eventContent={(info) => <div className="calendar-event"><span>{info.timeText}</span><strong>{info.event.title}</strong><small>♙ {info.event.extendedProps.arbitros}/2 árbitros</small></div>}
+            eventContent={(info) => <div className="calendar-event"><span>{info.timeText}</span><strong>{info.event.title}</strong><RefereeCount assignments={info.event.extendedProps.asignaciones} /></div>}
           />
         </section>
         {fecha && <PanelDia fecha={fecha} partidos={partidosDia} arbitros={arbitros} onClose={() => setFecha('')} onAssigned={cargarCalendario} />}

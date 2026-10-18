@@ -9,6 +9,9 @@ from .upload import bp as upload_bp
 from .historial import bp as historial_bp
 from .horarios import bp as horarios_bp
 from .bot import bp as bot_bp
+from .auth import bp as auth_bp
+from .usuarios import bp as usuarios_bp
+from .finanzas import bp as finanzas_bp
 
 __all__ = ["register_blueprints"]
 
@@ -22,4 +25,7 @@ def register_blueprints(app: Flask) -> Flask:
     app.register_blueprint(historial_bp, url_prefix="/api")
     app.register_blueprint(horarios_bp, url_prefix="/api/horarios")
     app.register_blueprint(bot_bp, url_prefix="/api/bot")
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(usuarios_bp, url_prefix="/api/usuarios")
+    app.register_blueprint(finanzas_bp, url_prefix="/api/finanzas")
     return app

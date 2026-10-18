@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from ..authz import roles_required
 from ..database import db
 from ..models import Ciudad, Estado, Partido, UbicacionCancha
 from ..services.auditoria import registrar_cambio
@@ -40,6 +41,7 @@ def listar_canchas():
 
 
 @bp.post("/canchas")
+@roles_required("super_admin", "admin")
 def crear_cancha():
     datos = request.get_json(silent=True) or {}
     faltantes = [campo for campo in ("nombre_cancha", "ciudad_id") if not datos.get(campo)]
@@ -71,6 +73,7 @@ def _snapshot_cancha(cancha):
 
 
 @bp.put("/canchas/<int:cancha_id>")
+@roles_required("super_admin", "admin")
 def actualizar_cancha(cancha_id):
     cancha = db.session.get(UbicacionCancha, cancha_id)
     if cancha is None:
@@ -113,6 +116,7 @@ def actualizar_cancha(cancha_id):
 
 
 @bp.delete("/canchas/<int:cancha_id>")
+@roles_required("super_admin", "admin")
 def eliminar_cancha(cancha_id):
     cancha = db.session.get(UbicacionCancha, cancha_id)
     if cancha is None:

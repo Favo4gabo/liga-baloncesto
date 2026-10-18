@@ -171,6 +171,8 @@ def reemplazar_arbitro_asignacion(asignacion_id: int, arbitro_id: int) -> Asigna
         for otra in asignacion.partido.asignaciones
     ):
         raise AsignacionError("Ese árbitro ya está asignado a este partido.", 409)
+    if asignacion.gastos_reales or asignacion.gastos_extra:
+        raise AsignacionError("No se puede cambiar el árbitro después de registrar gastos reales o extras; conserva el historial y realiza una nueva asignación.", 409)
 
     detalle = asignacion.detalle_costos
     datos = {
@@ -178,6 +180,7 @@ def reemplazar_arbitro_asignacion(asignacion_id: int, arbitro_id: int) -> Asigna
         "cantidad_noches": detalle.cantidad_noches if detalle else 1,
         "cantidad_dias": detalle.cantidad_dias_viaticos if detalle else 1,
         "medio_transporte": detalle.medio_externo if detalle else None,
+        "viatico_por_dia": detalle.viatico_por_dia if detalle else None,
     }
     partido_id = asignacion.partido_id
     db.session.delete(asignacion)
