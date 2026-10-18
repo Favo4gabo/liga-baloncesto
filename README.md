@@ -47,7 +47,7 @@ de colegiados a partir de la carga de calendarios en formato Excel.
 │       └── views/
 │           ├── Dashboard.jsx
 │           ├── Calendario.jsx
-│           └── CargaExcel.jsx
+│           └── ImportarArchivos.jsx
 └── database/
     └── init.sql
 ```
@@ -57,7 +57,8 @@ de colegiados a partir de la carga de calendarios en formato Excel.
 Copia `.env.example` a `.env` y ajusta las credenciales. Docker Compose lee
 ese fichero para sustituir las variables (`DB_USER`, `DB_PASSWORD`, `DB_NAME`,
 `DB_PORT`, `DATABASE_URL`, `SECRET_KEY`, `VITE_API_URL`, `VISION_PROVIDER`,
-`OPENROUTER_API_KEY`, `OPENROUTER_MODEL` y `BOT_WEBHOOK_TOKEN`).
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL` y
+`BOT_WEBHOOK_TOKEN`).
 
 ```bash
 cp .env.example .env
@@ -90,6 +91,61 @@ En Linux, macOS, Git Bash o WSL puede usarse el Makefile equivalente:
 make demo
 make help
 ```
+
+### Probar el bot de Telegram
+
+El bot funciona en modo **polling** y no necesita una URL pública ni
+`BOT_WEBHOOK_TOKEN`. Configura en `.env` un token nuevo generado por
+`@BotFather`, además de los IDs de Telegram que podrán aprobar gastos:
+
+```env
+TELEGRAM_BOT_TOKEN=pega_aqui_el_token_nuevo
+TELEGRAM_ADMIN_IDS=123456789
+```
+
+Con Docker, inicia el perfil del bot desde la raíz:
+
+```powershell
+docker compose --profile telegram up -d --build
+docker compose logs -f telegram-bot
+```
+
+Sin Docker, con las dependencias del backend instaladas y el entorno virtual
+activado, puedes iniciarlo en otra consola:
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.telegram_bot
+```
+
+El log debe mostrar `Bot de Telegram iniciado en modo polling.`. También
+puedes comprobar la identidad del bot sin mostrar el token en pantalla:
+
+```powershell
+$token = (Get-Content .env | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' } |
+  ForEach-Object { $_.Substring('TELEGRAM_BOT_TOKEN='.Length) })
+Invoke-RestMethod "https://api.telegram.org/bot$token/getMe" |
+  Select-Object -ExpandProperty ok
+```
+
+El resultado debe ser `True`. Para saber tu ID, escribe `/mi_id` al bot.
+
+Prueba el flujo en este orden:
+
+1. En el catálogo, verifica que el teléfono del árbitro esté registrado.
+2. En Telegram, escribe `/start` y comparte **tu propio contacto**.
+3. Pulsa **Mis asignaciones** y selecciona un partido próximo.
+4. Prueba **En camino** y **Llegué a instalación**; revisa que cambie el
+   estado de viaje en el calendario.
+5. Prueba **Reportar retraso** enviando `20 | tráfico`.
+6. Prueba **Reportar gasto** enviando `12,50 | taxi | traslado adicional`.
+7. Desde una cuenta cuyo ID esté en `TELEGRAM_ADMIN_IDS`, escribe `/pendientes`
+   y aprueba el gasto. El total de la asignación y su pago deben aumentar.
+
+Si el bot no responde, revisa `docker compose logs telegram-bot`. Un error
+`401 Unauthorized` indica un token inválido o revocado. Si no aparecen
+asignaciones, comprueba que el árbitro esté vinculado al teléfono exacto del
+catálogo y tenga un partido futuro asignado.
 
 ### Arranque local sin Docker
 
@@ -151,15 +207,7 @@ python -m flask run --port=5000
 
 Abre http://localhost:5000 para ver la interfaz temporal de Flask. También
 puedes consultar los endpoints desde Thunder Client o Postman:
-`GET /api/health`, `GET /api/partidos`, `GET /api/arbitros/` y
-`POST /api/upload-excel`.
-
-## Libro Excel maestro
-
-La carga masiva exige las hojas: `Estados`, `Ciudades`, `TarifasTraslado`,
-`TarifasHospedaje`, `Parametros`, `EstadosCercanos`, `Arbitros` y `Partidos`.
-El parámetro `viatico_por_dia` es obligatorio. Las tarifas y catálogos cargados
-pueden editarse posteriormente desde la aplicación.
+`GET /api/health`, `GET /api/partidos` y `GET /api/arbitros/`.
 
 De forma opcional, el libro puede incluir estas hojas para la planificación de
 viajes y sedes:
@@ -173,6 +221,20 @@ La estimación mostrada al asignar un árbitro aplica `T = distancia / velocidad
 + margen logístico`: local (≤40 km) a 35 km/h + 15 min, terrestre a 75 km/h +
 30 min y avión a 550 km/h + 2 h. La API entrega duración, llegada proyectada y
 porcentaje de avance; el frontend actualiza el avance cada 30 segundos.
+
+### Recomendaciones para importar horarios
+
+Para que la lectura automática sea más precisa, usa una tabla simple con una
+sola fila de encabezados y una fila por partido. Los encabezados reconocidos
+son `fecha`, `hora`, `árbitro`, `cancha`/`estadio` y `ciudad`; también se
+admite una columna combinada `fecha_hora`. Evita celdas combinadas, subtítulos
+intercalados y fórmulas sin valor calculado. La pantalla de previsualización
+resalta los campos con baja confianza para corregirlos antes de confirmar.
+
+En el calendario, cada árbitro asignado tiene la opción **Cambiar árbitro**.
+El cambio vuelve a calcular viáticos, traslados y hospedaje con la ciudad de
+origen del nuevo árbitro. Al pasar el cursor sobre su nombre se muestra una
+ayuda con el nombre completo.
 
 ## Estado
 
@@ -206,13 +268,18 @@ Variables del lector en `.env`:
 | Variable | Uso |
 | --- | --- |
 | `VISION_PROVIDER=simulado` | Modo local sin llamadas externas; útil para comprobar la interfaz. No interpreta realmente los píxeles de la imagen. |
-| `VISION_PROVIDER=openrouter` | Habilita visión multimodal real. |
-| `OPENROUTER_API_KEY` | API key privada de OpenRouter; solo se usa en el backend. |
-| `OPENROUTER_MODEL` | Modelo multimodal; por defecto `google/gemini-2.5-flash`. |
+| `VISION_PROVIDER=openrouter` | Visión multimodal real mediante OpenRouter. |
+| `VISION_PROVIDER=gemini` | Visión multimodal real con la API de Google (Google AI Studio). |
+| `OPENROUTER_API_KEY` | API key privada de OpenRouter (`sk-or-v1-...`); solo se usa en el backend. |
+| `OPENROUTER_MODEL` | Modelo multimodal de OpenRouter; por defecto `google/gemini-2.5-flash`. |
+| `GEMINI_API_KEY` | API key de Google AI Studio (`AIza...`); solo se usa en el backend. |
+| `GEMINI_MODEL` | Modelo de Gemini; por defecto `gemini-2.5-flash`. |
 
-Para usar OpenRouter, configura el proveedor y la clave en `.env` y reinicia el
-backend/servicio. El reconocimiento puede equivocarse: las sugerencias son
-orientativas y la aprobación humana es obligatoria.
+Para usar visión real, elige un proveedor, coloca su clave en `.env` y reinicia
+el backend/servicio (por ejemplo `.\scripts\dev-local.ps1 restart` en local o
+`docker compose up -d --force-recreate backend` con Docker). El reconocimiento
+puede equivocarse: las sugerencias son orientativas y la aprobación humana es
+obligatoria.
 
 ## Webhook del bot
 
@@ -220,6 +287,27 @@ Configura `BOT_WEBHOOK_TOKEN` como un secreto largo. La API espera la cabecera
 `X-Bot-Token` y un JSON con el teléfono del árbitro y el evento. Puede enviarse
 `asignacion_id` o `partido_id`; si se omiten, se aplica a la próxima asignación
 pendiente del árbitro.
+
+## Bot de Telegram para árbitros
+
+Para probar el bot localmente, configura en `.env` `TELEGRAM_BOT_TOKEN` (de
+@BotFather) y opcionalmente `TELEGRAM_ADMIN_IDS` con los IDs numéricos de las
+cuentas autorizadas a revisar gastos, separados por comas. Arranca el entorno
+con `.\scripts\dev-local.ps1 restart`; el script inicia el bot en polling
+solo cuando encuentra el token. No hace falta publicar un webhook ni exponer
+localhost. En Docker se puede arrancar con
+`docker compose --profile telegram up -d telegram-bot`.
+
+El árbitro inicia con `/start` y vincula la cuenta compartiendo su propio
+teléfono, que se valida contra el catálogo. Puede informar que va en camino,
+reportar retraso, confirmar llegada o registrar un gasto con el formato
+`monto | concepto | detalle`. Los gastos quedan pendientes y solo se agregan al
+costo de la asignación cuando un administrador los aprueba desde Telegram. El
+comando `/mi_id` permite consultar el ID numérico de Telegram para añadirlo a
+`TELEGRAM_ADMIN_IDS`; `/pendientes` lista los gastos por revisar.
+Antes de que el bot pueda enviarle avisos, cada administrador debe abrir el bot
+y enviar `/start`. Los árbitros vinculan su cuenta compartiendo su propio
+contacto de Telegram; su teléfono se compara con el guardado en el catálogo.
 
 ```json
 {

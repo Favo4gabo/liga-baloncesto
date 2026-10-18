@@ -19,7 +19,7 @@ param(
   [ValidateSet('start', 'help', 'backend', 'frontend', 'status', 'logs', 'api', 'plantilla', 'import', 'seed', 'stop', 'restart', 'reset')]
   [string]$Tarea = 'start',
 
-  [ValidateSet('backend', 'frontend')]
+  [ValidateSet('backend', 'frontend', 'telegram')]
   [string]$Servicio
 )
 
@@ -171,6 +171,38 @@ function Start-Frontend {
   Write-Host "Frontend iniciado (PID $($proc.Id)) en $UrlNavegador"
 }
 
+function Test-TelegramTokenConfigurado {
+  if (-not [string]::IsNullOrWhiteSpace($env:TELEGRAM_BOT_TOKEN)) { return $true }
+  $envFile = Join-Path $Raiz '.env'
+  if (-not (Test-Path $envFile)) { return $false }
+  foreach ($linea in (Get-Content $envFile)) {
+    if ($linea -match '^\s*TELEGRAM_BOT_TOKEN\s*=\s*(.+?)\s*$') {
+      $valor = $Matches[1].Trim().Trim([char]34).Trim([char]39)
+      return -not [string]::IsNullOrWhiteSpace($valor)
+    }
+  }
+  return $false
+}
+
+function Start-TelegramBot {
+  if (-not (Test-TelegramTokenConfigurado)) {
+    Write-Host 'Telegram: sin iniciar; agrega TELEGRAM_BOT_TOKEN a .env cuando lo tengas.' -ForegroundColor Yellow
+    return
+  }
+  if (Test-ServicioActivo 'telegram') { Write-Host 'Bot de Telegram ya está en ejecución.'; return }
+  New-Item -ItemType Directory -Force -Path $DirRun | Out-Null
+  $py = Get-PythonExe
+  $env:PYTHONPATH = $DirBack
+  $proc = Start-Process -FilePath $py `
+    -ArgumentList @('-m', 'app.telegram_bot') `
+    -WorkingDirectory $DirBack `
+    -RedirectStandardOutput (Join-Path $DirRun 'telegram.out.log') `
+    -RedirectStandardError (Join-Path $DirRun 'telegram.err.log') `
+    -WindowStyle Hidden -PassThru
+  $proc.Id | Set-Content (Get-PidFile 'telegram')
+  Write-Host "Bot de Telegram iniciado (PID $($proc.Id))."
+}
+
 function Wait-Frontend {
   for ($i = 0; $i -lt 60; $i++) {
     try {
@@ -186,7 +218,7 @@ function Wait-Frontend {
 }
 
 function Stop-Servicios {
-  foreach ($nombre in @('backend', 'frontend')) {
+  foreach ($nombre in @('telegram', 'backend', 'frontend')) {
     $f = Get-PidFile $nombre
     if (-not (Test-Path $f)) { continue }
     $procId = 0
@@ -235,6 +267,11 @@ function Get-Estatus {
       else { 'detenido' }
     Write-Host ("{0,-9} puerto {1,-5} {2}" -f $nombre, $par[1], $detalle)
   }
+  $botActivo = Test-ServicioActivo 'telegram'
+  $botEstado = if ($botActivo) { "activo (PID $(Get-Content (Get-PidFile 'telegram') | Select-Object -First 1))" }
+    elseif (Test-TelegramTokenConfigurado) { 'detenido (reinicia el entorno para iniciarlo)' }
+    else { 'sin configurar (TELEGRAM_BOT_TOKEN vacío)' }
+  Write-Host ("{0,-9} {1}" -f 'telegram', $botEstado)
   $db = Join-Path $DirBack 'dev.db'
   if (Test-Path $db) {
     Write-Host ("base datos  {0}  ({1:N0} KB)" -f $db, ((Get-Item $db).Length / 1KB))
@@ -260,6 +297,7 @@ function Invoke-Start([bool]$AbrirNavegador) {
   Wait-Backend
   Start-Frontend
   Wait-Frontend
+  Start-TelegramBot
   Invoke-Seed
   if ($AbrirNavegador) { Start-Process $UrlNavegador }
 }

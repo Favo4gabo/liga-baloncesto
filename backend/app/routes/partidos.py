@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..database import db
 from ..models import ARBITROS_POR_PARTIDO, Arbitro, AsignacionPartido, Ciudad, ESTADOS_PAGO, ESTADOS_VIAJE, Partido
-from ..services.asignaciones import AsignacionError, crear_asignacion
+from ..services.asignaciones import AsignacionError, crear_asignacion, reemplazar_arbitro_asignacion
 from ..services.calculator import calcular_viaticos_asignacion
 from ..services.notifications import registrar_y_enviar_evento
 
@@ -80,6 +80,20 @@ def asignar_arbitro(partido_id):
         asignacion = crear_asignacion(partido_id, datos)
         return jsonify(asignacion.to_dict()), 201
     except AsignacionError as error:
+        return jsonify({"error": str(error)}), error.status_code
+
+
+@bp.put("/asignaciones/<int:asignacion_id>/arbitro")
+def actualizar_arbitro_asignacion(asignacion_id):
+    datos = request.get_json(silent=True) or {}
+    arbitro_id = datos.get("arbitro_id")
+    if isinstance(arbitro_id, bool) or not isinstance(arbitro_id, int):
+        return jsonify({"error": "El campo 'arbitro_id' es obligatorio."}), 400
+    try:
+        asignacion = reemplazar_arbitro_asignacion(asignacion_id, arbitro_id)
+        return jsonify(asignacion.to_dict(incluir_detalle=True)), 200
+    except AsignacionError as error:
+        db.session.rollback()
         return jsonify({"error": str(error)}), error.status_code
 
 

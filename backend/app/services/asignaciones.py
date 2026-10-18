@@ -63,6 +63,7 @@ def crear_asignacion(partido_id: int, datos: dict, commit: bool = True) -> Asign
             noches,
             dias,
             datos.get("medio_transporte"),
+            datos.get("viatico_por_dia"),
         )
         distancia = distancia_entre(arbitro.ciudad_origen_id, partido.ciudad_juego_id)
         medio = viaticos["medio_externo"] or "local"
@@ -153,3 +154,32 @@ def crear_asignacion(partido_id: int, datos: dict, commit: bool = True) -> Asign
     except Exception:
         db.session.rollback()
         raise
+
+
+def reemplazar_arbitro_asignacion(asignacion_id: int, arbitro_id: int) -> AsignacionPartido:
+    """Recrea una asignación con otro árbitro para mantener costos y rutas coherentes."""
+    asignacion = db.session.get(AsignacionPartido, asignacion_id)
+    arbitro = db.session.get(Arbitro, arbitro_id)
+    if asignacion is None or arbitro is None:
+        raise AsignacionError("La asignación o árbitro indicado no existe.", 404)
+    if asignacion.arbitro_id == arbitro_id:
+        return asignacion
+    if not arbitro.activo:
+        raise AsignacionError("No se puede asignar un árbitro inactivo.", 400)
+    if any(
+        otra.id != asignacion.id and otra.arbitro_id == arbitro_id
+        for otra in asignacion.partido.asignaciones
+    ):
+        raise AsignacionError("Ese árbitro ya está asignado a este partido.", 409)
+
+    detalle = asignacion.detalle_costos
+    datos = {
+        "arbitro_id": arbitro_id,
+        "cantidad_noches": detalle.cantidad_noches if detalle else 1,
+        "cantidad_dias": detalle.cantidad_dias_viaticos if detalle else 1,
+        "medio_transporte": detalle.medio_externo if detalle else None,
+    }
+    partido_id = asignacion.partido_id
+    db.session.delete(asignacion)
+    db.session.flush()
+    return crear_asignacion(partido_id, datos)

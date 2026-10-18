@@ -66,7 +66,6 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/calendario" element={<Calendario />} />
             <Route path="/importar" element={<ImportarArchivos />} />
-            <Route path="/carga" element={<Navigate to="/importar?tipo=libro" replace />} />
             <Route path="/horarios" element={<Navigate to="/importar?tipo=horario" replace />} />
             <Route path="/administracion" element={<Administracion />} />
             <Route path="/arbitros" element={<MetricDetail />} />

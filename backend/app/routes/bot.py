@@ -127,7 +127,7 @@ def recibir_webhook():
             "ESTADO_BOT",
             antes=antes,
             despues=despues,
-            origen="bot_whatsapp",
+            origen="telegram",
         )
     except Exception:
         db.session.rollback()

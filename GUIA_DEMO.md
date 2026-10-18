@@ -119,8 +119,9 @@ docker compose exec -T backend python scripts/generar_plantilla.py /app/plantill
 
 El archivo quedará en tu carpeta como `backend/plantilla_liga.xlsx`.
 
-Luego, en la interfaz web: menú **Importar Excel** → selecciona
-`backend/plantilla_liga.xlsx` → **Importar información**.
+La interfaz web permite cargar horarios desde **Importar archivos**. Selecciona
+un archivo `.xlsx`, `.csv`, `.png` o `.jpg`, revisa la previsualización y
+confirma únicamente los datos correctos.
 
 ---
 

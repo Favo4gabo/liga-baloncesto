@@ -34,6 +34,14 @@ export default function CostBreakdown({ costs, detail, title = 'Desglose de cost
         <span>Viáticos <small>{days != null && dailyAllowance != null ? `${days} día(s) × ${amount(dailyAllowance)} por día` : 'tarifa diaria según configuración'}</small></span>
         <strong>{amount(costs.costo_viaticos)}</strong>
       </div>
+      {Number(costs.gastos_extra_aprobados || 0) > 0 && <div className="cost-row">
+        <span>Gastos extra aprobados</span>
+        <strong>{amount(costs.gastos_extra_aprobados)}</strong>
+      </div>}
+      {(costs.gastos_extra_pendientes || []).map((expense) => <div className="cost-row" key={expense.id}>
+        <span>Gasto pendiente de revisión <small>#{expense.id} · {expense.concepto}</small></span>
+        <strong>{amount(expense.monto)} · pendiente</strong>
+      </div>)}
       <div className="cost-total"><span>Total logístico</span><strong>{amount(costs.costo_total)}</strong></div>
       <p className="cost-note">Importes calculados con las tarifas configuradas por el administrador; no se aplica conversión de moneda.</p>
     </section>

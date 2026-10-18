@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { API_URL } from '../App.jsx'
 import FormularioAsignacion from './FormularioAsignacion.jsx'
 import CostBreakdown from './CostBreakdown.jsx'
 
@@ -6,6 +8,10 @@ const time = (value) => new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minu
 const amount = (value) => Number(value || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigned }) {
+  const [editingId, setEditingId] = useState(null)
+  const [selectedReferee, setSelectedReferee] = useState('')
+  const [editError, setEditError] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
   const asignaciones = partidos.flatMap((partido) => partido.asignaciones || [])
   const totalDia = asignaciones.reduce((total, asignacion) => total + Number(asignacion.costo_total || 0), 0)
 
@@ -47,8 +53,30 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                       <div className="assignment-card" key={asignacion.id}>
                         <div className="assignment-name">
                           <span className="referee-avatar">{asignacion.arbitro?.nombre?.[0]}{asignacion.arbitro?.apellido?.[0]}</span>
-                          <div><strong>{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}</strong><small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span> · Pago: {asignacion.estado_pago}</small></div>
+                          <div className="referee-hover" title={`Árbitro asignado: ${asignacion.arbitro?.nombre} ${asignacion.arbitro?.apellido}`}>
+                            <strong>{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}</strong>
+                            <small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span> · Pago: {asignacion.estado_pago}</small>
+                          </div>
                         </div>
+                        {editingId === asignacion.id ? (
+                          <div className="assignment-edit">
+                            <select value={selectedReferee} onChange={(event) => setSelectedReferee(event.target.value)}>
+                              <option value="">Selecciona un árbitro</option>
+                              {arbitros.filter((item) => item.activo && (item.id === asignacion.arbitro_id || !partido.asignaciones.some((other) => other.id !== asignacion.id && other.arbitro_id === item.id))).map((item) => <option value={item.id} key={item.id}>{item.nombre} {item.apellido}</option>)}
+                            </select>
+                            <button type="button" className="btn-primary-custom" disabled={savingEdit || !selectedReferee} onClick={async () => {
+                              setSavingEdit(true); setEditError('')
+                              try {
+                                const response = await fetch(`${API_URL}/asignaciones/${asignacion.id}/arbitro`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ arbitro_id: Number(selectedReferee) }) })
+                                const data = await response.json()
+                                if (!response.ok) throw new Error(data.error || 'No se pudo cambiar el árbitro.')
+                                setEditingId(null); await onAssigned()
+                              } catch (error) { setEditError(error.message) } finally { setSavingEdit(false) }
+                            }}>Guardar</button>
+                            <button type="button" className="assign-cancel" onClick={() => { setEditingId(null); setEditError('') }}>Cancelar</button>
+                            {editError && <small className="form-error">{editError}</small>}
+                          </div>
+                        ) : <button type="button" className="assignment-edit-button" onClick={() => { setEditingId(asignacion.id); setSelectedReferee(String(asignacion.arbitro_id)); setEditError('') }}>Cambiar árbitro</button>}
                         <div className="assignment-route-summary">
                           <span>{asignacion.arbitro?.ciudad_origen?.nombre || 'Origen'} → {partido.ciudad_juego?.nombre || 'Sede'}</span>
                           <span>{trasladoExterno ? `Traslado externo: ${trasladoExterno.medio}` : 'Sin traslado externo'}</span>

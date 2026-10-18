@@ -4,13 +4,21 @@ Sistema de gestión y logística de árbitros de baloncesto.
 """
 
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 from flask_migrate import Migrate
 
 from .database import db, init_db
 from .routes import register_blueprints
+
+
+# Carga la configuración local del proyecto tanto al arrancar Flask directamente
+# como desde scripts/dev-local.ps1. Las variables ya definidas en el entorno
+# (por ejemplo, las inyectadas por Docker) tienen prioridad.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 def create_app(config: dict | None = None) -> Flask:
