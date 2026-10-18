@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import Dashboard from './views/Dashboard.jsx'
 import Calendario from './views/Calendario.jsx'
@@ -7,9 +8,25 @@ import MetricDetail from './views/MetricDetail.jsx'
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
+function readSavedTheme() {
+  try {
+    return window.localStorage.getItem('arbiliga-theme') === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
 export default function App() {
+  const [theme, setTheme] = useState(readSavedTheme)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101a27' : '#16325c')
+    try { window.localStorage.setItem('arbiliga-theme', theme) } catch { /* El tema sigue activo aunque el navegador bloquee storage. */ }
+  }, [theme])
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">AL</span>
@@ -30,7 +47,12 @@ export default function App() {
       <div className="content-area">
         <header className="topbar">
           <div><span className="eyebrow">PANEL DE CONTROL</span><h1>Gestión arbitral</h1></div>
-          <div className="topbar-status"><span className="status-dot" /> Sistema operativo</div>
+          <div className="topbar-actions">
+            <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'} aria-pressed={theme === 'dark'}>
+              <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+            </button>
+            <div className="topbar-status"><span className="status-dot" /> Sistema operativo</div>
+          </div>
         </header>
         <main className="page-content">
           <Routes>
