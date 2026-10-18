@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from ..authz import roles_required
 from ..database import db
 from ..models import Arbitro, Ciudad, Partido, UbicacionCancha
 from ..services.asignaciones import AsignacionError, crear_asignacion
@@ -47,6 +48,7 @@ def _entero_positivo(valor, campo):
 
 
 @bp.post("/confirmar")
+@roles_required("super_admin", "admin")
 def confirmar_horario():
     datos = request.get_json(silent=True)
     filas = datos.get("filas") if isinstance(datos, dict) else None

@@ -1,7 +1,9 @@
 """Modelos SQLAlchemy del sistema de logística de árbitros."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
+
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from .database import db
 
@@ -10,6 +12,7 @@ ESTADOS_VIAJE = ("Asignado", "Confirmado", "En camino", "En ciudad", "En estadio
 ESTADOS_PAGO = ("Pendiente", "Pagado")
 ESTADOS_PARTIDO = ("Programado", "En curso", "Finalizado")
 ARBITROS_POR_PARTIDO = 2
+ROLES_USUARIO = ("super_admin", "admin", "accountant", "viewer")
 
 
 def _numero(valor):
@@ -199,6 +202,7 @@ class AsignacionPartido(db.Model):
     pago = db.relationship("Pago", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
     detalle_costos = db.relationship("DetalleCostoAsignacion", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
     eventos = db.relationship("EventoNotificacion", back_populates="asignacion", cascade="all, delete-orphan")
+    gastos_reales = db.relationship("GastoReal", back_populates="asignacion", cascade="all, delete-orphan")
 
     def to_dict(self, incluir_partido=True, incluir_detalle=False):
         datos = {"id": self.id, "partido_id": self.partido_id, "arbitro_id": self.arbitro_id,
@@ -312,6 +316,55 @@ class Pago(db.Model):
                 "referencia": self.referencia}
 
 
+class GastoReal(db.Model):
+    """Importe realmente incurrido por una categoría logística de una asignación."""
+    __tablename__ = "gastos_reales"
+    __table_args__ = (db.CheckConstraint(
+        "categoria IN ('transporte_externo', 'transporte_interno', 'hospedaje', 'viaticos')",
+        name="ck_gasto_real_categoria",
+    ),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    asignacion_id = db.Column(db.Integer, db.ForeignKey("asignaciones_partido.id", ondelete="CASCADE"), nullable=False, index=True)
+    categoria = db.Column(db.String(30), nullable=False)
+    fecha_gasto = db.Column(db.Date, nullable=False)
+    monto_original = db.Column(db.Numeric(14, 2), nullable=False)
+    moneda = db.Column(db.String(3), nullable=False, default="USD")
+    monto_usd = db.Column(db.Numeric(14, 2), nullable=False)
+    tasa_bcv = db.Column(db.Numeric(14, 6))
+    descripcion = db.Column(db.String(300))
+    referencia_documento = db.Column(db.String(120))
+    creado_por_id = db.Column(db.Integer, db.ForeignKey("usuarios.id", ondelete="SET NULL"))
+    creado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    anulado = db.Column(db.Boolean, nullable=False, default=False)
+    motivo_anulacion = db.Column(db.String(300))
+    anulado_por_id = db.Column(db.Integer, db.ForeignKey("usuarios.id", ondelete="SET NULL"))
+    anulado_en = db.Column(db.DateTime)
+
+    asignacion = db.relationship("AsignacionPartido", back_populates="gastos_reales")
+    creado_por = db.relationship("Usuario", foreign_keys=[creado_por_id])
+    anulado_por = db.relationship("Usuario", foreign_keys=[anulado_por_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "asignacion_id": self.asignacion_id,
+            "categoria": self.categoria,
+            "fecha_gasto": self.fecha_gasto.isoformat(),
+            "monto_original": _numero(self.monto_original),
+            "moneda": self.moneda,
+            "monto_usd": _numero(self.monto_usd),
+            "tasa_bcv": _numero(self.tasa_bcv) if self.tasa_bcv is not None else None,
+            "descripcion": self.descripcion,
+            "referencia_documento": self.referencia_documento,
+            "creado_por_id": self.creado_por_id,
+            "creado_en": self.creado_en.isoformat() if self.creado_en else None,
+            "anulado": self.anulado,
+            "motivo_anulacion": self.motivo_anulacion,
+            "anulado_en": self.anulado_en.isoformat() if self.anulado_en else None,
+        }
+
+
 class EventoNotificacion(db.Model):
     __tablename__ = "eventos_notificacion"
     id = db.Column(db.Integer, primary_key=True)
@@ -347,4 +400,58 @@ class HistorialCambio(db.Model):
             "despues": json.loads(self.despues) if self.despues else None,
             "origen": self.origen,
             "fecha": self.fecha.isoformat() if self.fecha else None,
+        }
+
+
+class Usuario(db.Model):
+    """Cuenta autenticada; nunca se conserva una contraseña en texto plano."""
+    __tablename__ = "usuarios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(190), nullable=False, unique=True, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    rol = db.Column(db.String(30), nullable=False, default="viewer", index=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    debe_cambiar_password = db.Column(db.Boolean, nullable=False, default=True)
+    creado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    actualizado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def establecer_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password, method="scrypt")
+
+    def verificar_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
+
+    def to_public_dict(self):
+        return {
+            "id": self.id,
+            "nombre": self.nombre,
+            "email": self.email,
+            "rol": self.rol,
+            "activo": self.activo,
+            "debe_cambiar_password": self.debe_cambiar_password,
+            "creado_en": self.creado_en.isoformat() if self.creado_en else None,
+        }
+
+
+class TasaCambioBCV(db.Model):
+    """Tasa oficial: bolívares por un dólar, efectiva en la fecha indicada."""
+    __tablename__ = "tasas_cambio_bcv"
+
+    fecha = db.Column(db.Date, primary_key=True)
+    ves_por_usd = db.Column(db.Numeric(14, 6), nullable=False)
+    fuente = db.Column(db.String(40), nullable=False, default="BCV")
+    url_fuente = db.Column(db.String(500))
+    registrada_por_id = db.Column(db.Integer, db.ForeignKey("usuarios.id", ondelete="SET NULL"))
+    creada_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    registrada_por = db.relationship("Usuario")
+
+    def to_dict(self):
+        return {
+            "fecha": self.fecha.isoformat(),
+            "ves_por_usd": _numero(self.ves_por_usd),
+            "fuente": self.fuente,
+            "url_fuente": self.url_fuente,
         }

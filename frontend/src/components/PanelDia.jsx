@@ -47,7 +47,7 @@ export default function PanelDia({ fecha, partidos, arbitros, onClose, onAssigne
                       <div className="assignment-card" key={asignacion.id}>
                         <div className="assignment-name">
                           <span className="referee-avatar">{asignacion.arbitro?.nombre?.[0]}{asignacion.arbitro?.apellido?.[0]}</span>
-                          <div><strong>{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}</strong><small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span> · Pago: {asignacion.estado_pago}</small></div>
+                          <div><strong>{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}</strong><small>Viaje: <span className={`travel-status-badge ${(asignacion.estado_viaje || '').toLowerCase().replaceAll(' ', '-')}`}>{asignacion.estado_viaje}</span></small></div>
                         </div>
                         <div className="assignment-route-summary">
                           <span>{asignacion.arbitro?.ciudad_origen?.nombre || 'Origen'} → {partido.ciudad_juego?.nombre || 'Sede'}</span>

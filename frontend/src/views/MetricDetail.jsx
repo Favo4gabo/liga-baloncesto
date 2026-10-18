@@ -91,9 +91,9 @@ export default function MetricDetail() {
       </section>
     ) : tipo === 'asignaciones' ? (
       <section className="panel"><header className="panel-header"><h3>Asignaciones de {mes}</h3><span className="badge-soft">{asignacionesDelMes.length} árbitros asignados</span></header>
-        <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha / partido</th><th>Árbitro y origen</th><th>Asignación</th><th>Viaje</th><th>Pago</th><th>Total logístico</th></tr></thead><tbody>
-          {asignacionesDelMes.map(({ partido, asignacion }) => <tr key={asignacion.id}><td>{dateTime(partido.fecha_hora)}<small className="table-subline">{partido.estadio_cancha} · {partido.ciudad_juego?.nombre}</small></td><td className="match-name">{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}<small className="table-subline">{asignacion.arbitro?.ciudad_origen?.nombre}, {asignacion.arbitro?.ciudad_origen?.estado?.nombre}</small></td><td>{partido.arbitros_asignados ?? partido.asignaciones.length}/{partido.arbitros_requeridos ?? 2}</td><td><span className="badge-soft">{asignacion.estado_viaje}</span></td><td>{asignacion.estado_pago}</td><td className="monthly-total">{money(asignacion.costo_total)}</td></tr>)}
-          {!asignacionesDelMes.length && <tr><td colSpan="6" className="empty-cell">No hay asignaciones para este mes.</td></tr>}
+        <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha / partido</th><th>Árbitro y origen</th><th>Asignación</th><th>Viaje</th><th>Total logístico</th></tr></thead><tbody>
+          {asignacionesDelMes.map(({ partido, asignacion }) => <tr key={asignacion.id}><td>{dateTime(partido.fecha_hora)}<small className="table-subline">{partido.estadio_cancha} · {partido.ciudad_juego?.nombre}</small></td><td className="match-name">{asignacion.arbitro?.nombre} {asignacion.arbitro?.apellido}<small className="table-subline">{asignacion.arbitro?.ciudad_origen?.nombre}, {asignacion.arbitro?.ciudad_origen?.estado?.nombre}</small></td><td>{partido.arbitros_asignados ?? partido.asignaciones.length}/{partido.arbitros_requeridos ?? 2}</td><td><span className="badge-soft">{asignacion.estado_viaje}</span></td><td className="monthly-total">{money(asignacion.costo_total)}</td></tr>)}
+          {!asignacionesDelMes.length && <tr><td colSpan="5" className="empty-cell">No hay asignaciones para este mes.</td></tr>}
         </tbody></table></div>
       </section>
     ) : (

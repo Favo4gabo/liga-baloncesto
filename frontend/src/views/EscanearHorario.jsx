@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
 
 const acceptedFiles = '.xlsx,.csv,.png,.jpg,.jpeg'
 
@@ -20,9 +20,9 @@ export default function EscanearHorario({ embedded = false }) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/catalogos/ciudades`),
-      fetch(`${API_URL}/arbitros/`),
-      fetch(`${API_URL}/catalogos/canchas`),
+      apiFetch('/catalogos/ciudades'),
+      apiFetch('/arbitros/'),
+      apiFetch('/catalogos/canchas'),
     ]).then(async ([cityResponse, refereeResponse, venueResponse]) => {
       if (![cityResponse, refereeResponse, venueResponse].every((response) => response.ok)) throw new Error('No se pudieron cargar los catálogos.')
       const [cityList, refereeList, venueList] = await Promise.all([cityResponse.json(), refereeResponse.json(), venueResponse.json()])
@@ -48,7 +48,7 @@ export default function EscanearHorario({ embedded = false }) {
     try {
       const body = new FormData()
       body.append('file', file)
-      const response = await fetch(`${API_URL}/horarios/escanear`, { method: 'POST', body })
+      const response = await apiFetch('/horarios/escanear', { method: 'POST', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'No se pudo leer el horario.')
       setFilas(data.filas || [])
@@ -78,7 +78,7 @@ export default function EscanearHorario({ embedded = false }) {
     setError('')
     setResultado(null)
     try {
-      const response = await fetch(`${API_URL}/horarios/confirmar`, {
+      const response = await apiFetch('/horarios/confirmar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filas: filas.map((row) => ({

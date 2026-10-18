@@ -57,7 +57,8 @@ de colegiados a partir de la carga de calendarios en formato Excel.
 Copia `.env.example` a `.env` y ajusta las credenciales. Docker Compose lee
 ese fichero para sustituir las variables (`DB_USER`, `DB_PASSWORD`, `DB_NAME`,
 `DB_PORT`, `DATABASE_URL`, `SECRET_KEY`, `VITE_API_URL`, `VISION_PROVIDER`,
-`OPENROUTER_API_KEY`, `OPENROUTER_MODEL` y `BOT_WEBHOOK_TOKEN`).
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `BOT_WEBHOOK_TOKEN`, `FRONTEND_ORIGINS`,
+`COOKIE_SECURE` y `BCV_URL`).
 
 ```bash
 cp .env.example .env
@@ -253,6 +254,61 @@ Endpoints nuevos:
 | `POST` | `/api/horarios/confirmar` | Inserta las filas revisadas por una persona. JSON: `{ "filas": [...] }`. |
 | `POST` | `/api/bot/webhook` | Actualiza el estado arbitral; requiere `X-Bot-Token`. |
 | `GET` | `/api/historial` | Consulta bitácora con filtros y paginación. |
+
+## Cuentas y permisos
+
+La API y la interfaz requieren una sesión autenticada. Los perfiles son:
+
+| Perfil | Capacidades |
+| --- | --- |
+| `super_admin` | Propietarios: acceso completo, administra usuarios, roles y bloqueo de cuentas. Se crean como máximo dos. |
+| `admin` | Gestiona árbitros, canchas, importaciones, partidos y asignaciones. |
+| `accountant` | Consulta finanzas, registra/anula gastos reales y descarga informes. No administra la liga. |
+| `viewer` | Consulta la aplicación; no modifica datos ni descarga informes. |
+
+En el primer arranque, crea de forma interactiva las dos cuentas propietarias:
+
+```bash
+docker compose exec backend flask create-superadmin
+docker compose exec backend flask create-superadmin
+```
+
+El comando solicita correo, nombre y contraseña sin mostrarla mientras se escribe.
+Las contraseñas se almacenan como hash y no son recuperables en texto plano. Un
+superadministrador puede emitir una clave temporal de un solo uso para otra
+cuenta; el usuario debe reemplazarla al iniciar sesión. El comando
+`docker compose exec backend flask reset-user-password correo@ejemplo.com`
+permite recuperar una cuenta desde una terminal operativa.
+
+Las cookies de sesión son HttpOnly y las operaciones de escritura requieren CSRF.
+En producción configura `SECRET_KEY`, `COOKIE_SECURE=true` y los orígenes HTTPS
+permitidos en `FRONTEND_ORIGINS`.
+
+## Finanzas, gastos reales e informes
+
+Los importes de tarifas se interpretan como presupuesto en USD. La vista de
+finanzas muestra presupuesto por asignación, gastos reales y variación por
+categoría. El perfil contable, administración y superadministración pueden
+registrar o anular gastos reales con categoría, fecha, moneda y referencia; las
+anulaciones quedan auditadas. Los informes Excel/PDF se agrupan por árbitro,
+partido, ciudad o temporada. Los perfiles viewer pueden consultar, pero no
+descargar.
+
+Para gastos reales en VES debe existir una tasa BCV guardada para la fecha del
+gasto. Administración puede solicitar la tasa publicada hoy o registrar una
+tasa histórica verificada. El portal público del BCV no garantiza un endpoint
+API estable: si la consulta automática falla, la pantalla informa del error y
+se registra manualmente la cotización oficial; no se estima ni inventa.
+
+Por decisión del alcance actual, **no se marca un pago como realizado desde la
+aplicación, no se cierra nómina y no se envían correos de pago/nómina**. Los
+estados de pagos heredados se conservan para consulta, pero el endpoint rechaza
+intentos de modificarlos. Las notificaciones SMTP existentes se limitan a los
+eventos operativos ya soportados.
+
+La conversión VES usa la tasa efectiva en la fecha del gasto real (y en la fecha
+de pago registrada para los presupuestos ya pagados). Las filas sin tasa
+histórica permanecen sin conversión hasta registrar la tasa oficial.
 
 ## Notas de desarrollo
 

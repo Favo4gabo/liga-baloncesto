@@ -2,12 +2,14 @@
 
 from flask import Blueprint, jsonify, request
 
+from ..authz import roles_required
 from ..services.excel_parser import procesar_archivo_excel
 
 bp = Blueprint("upload", __name__)
 
 
 @bp.post("/upload-excel")
+@roles_required("super_admin", "admin")
 def cargar_excel():
     archivo = request.files.get("file")
     if archivo is None or not archivo.filename or not archivo.filename.lower().endswith(".xlsx"):

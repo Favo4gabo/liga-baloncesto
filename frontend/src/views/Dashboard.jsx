@@ -24,16 +24,18 @@ export default function Dashboard() {
   }, [])
 
   const asignaciones = data.partidos.reduce((total, partido) => total + (partido.asignaciones?.length || 0), 0)
+  const gastoTotal = data.partidos.reduce((total, partido) => total + (partido.asignaciones || []).reduce((subtotal, asignacion) => subtotal + Number(asignacion.costo_total || 0), 0), 0)
   const cards = [
     ['♙', data.arbitros.filter((a) => a.activo).length, 'Árbitros activos', '/arbitros'],
     ['◫', data.partidos.length, 'Partidos registrados', '/partidos'],
     ['✓', asignaciones, 'Asignaciones realizadas', '/asignaciones'],
+    ['▤', gastoTotal, 'Gastos del calendario (USD)', '/finanzas', 'money'],
   ]
 
   return <>
     <div className="page-heading"><div><h2>Resumen de la liga</h2><p>Consulta rápidamente la actividad y logística arbitral.</p></div></div>
     {error && <div className="error-notice">{error} Verifica que el backend esté activo.</div>}
-    <section className="metrics-grid">{cards.map(([icon, value, label, path]) => <Link className="metric-card metric-card-link" to={path} key={label} aria-label={`Ver detalle: ${label}`}><span className="metric-icon">{icon}</span><strong className="metric-value"><AnimatedNumber value={value} /></strong><span className="metric-label">{label}</span><span className="metric-card-action">Ver detalle <span aria-hidden="true">→</span></span></Link>)}</section>
+    <section className="metrics-grid">{cards.map(([icon, value, label, path, kind]) => <Link className="metric-card metric-card-link" to={path} key={label} aria-label={`Ver detalle: ${label}`}><span className="metric-icon">{icon}</span><strong className="metric-value">{kind === 'money' ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <AnimatedNumber value={value} />}</strong><span className="metric-label">{label}</span><span className="metric-card-action">Ver detalle <span aria-hidden="true">→</span></span></Link>)}</section>
     <section className="panel">
       <header className="panel-header"><h3>Próximos partidos</h3><Link to="/calendario">Ver calendario completo →</Link></header>
       <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha y hora</th><th>Cancha / estadio</th><th>Ciudad sede</th><th>Árbitros</th><th>Estado</th></tr></thead>

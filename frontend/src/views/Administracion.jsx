@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
 
 const emptyReferee = { nombre: '', apellido: '', telefono: '', email: '', ciudad_origen_id: '' }
 const emptyVenue = { nombre_cancha: '', ciudad_id: '', direccion: '', latitud: '', longitud: '' }
@@ -22,9 +22,9 @@ export default function Administracion() {
 
   const load = useCallback(async () => {
     const responses = await Promise.all([
-      fetch(`${API_URL}/catalogos/ciudades`),
-      fetch(`${API_URL}/arbitros/`),
-      fetch(`${API_URL}/catalogos/canchas`),
+      apiFetch('/catalogos/ciudades'),
+      apiFetch('/arbitros/'),
+      apiFetch('/catalogos/canchas'),
     ])
     if (!responses.every((response) => response.ok)) throw new Error('No se pudieron cargar los catálogos y árbitros.')
     const [cities, refs, venues] = await Promise.all(responses.map((response) => response.json()))
@@ -32,7 +32,7 @@ export default function Administracion() {
     setArbitros(refs)
     setCanchas(venues)
     try {
-      const historyResponse = await fetch(`${API_URL}/historial?per_page=10`)
+      const historyResponse = await apiFetch('/historial?per_page=10')
       if (!historyResponse.ok) throw new Error(`El backend respondió HTTP ${historyResponse.status} al consultar el historial.`)
       const changes = await historyResponse.json()
       setHistorial(changes.items || [])
@@ -49,7 +49,7 @@ export default function Administracion() {
   const cityLabel = (item) => `${item?.nombre || 'Ciudad desconocida'} · ${item?.estado?.nombre || 'Sin estado'}`
 
   async function send(url, method, data) {
-    const response = await fetch(`${API_URL}/${url}`, {
+    const response = await apiFetch(`/${url}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
       ...(data ? { body: JSON.stringify(data) } : {}),

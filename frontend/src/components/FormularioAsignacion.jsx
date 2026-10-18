@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
 import CostBreakdown from './CostBreakdown.jsx'
 
 export default function FormularioAsignacion({ partido, arbitros, onCreated }) {
@@ -30,7 +30,7 @@ export default function FormularioAsignacion({ partido, arbitros, onCreated }) {
     const controller = new AbortController()
     setPreviewLoading(true)
     setPreviewError('')
-    fetch(`${API_URL}/partidos/${partido.id}/calcular-costos`, {
+    apiFetch(`/partidos/${partido.id}/calcular-costos`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -72,7 +72,7 @@ export default function FormularioAsignacion({ partido, arbitros, onCreated }) {
         cantidad_dias: Number(dias),
       }
       if (salida) payload.fecha_salida = new Date(salida).toISOString()
-      const response = await fetch(`${API_URL}/partidos/${partido.id}/asignar`, {
+      const response = await apiFetch(`/partidos/${partido.id}/asignar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

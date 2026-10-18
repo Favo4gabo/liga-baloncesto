@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from ..authz import roles_required
 from ..database import db
 from ..models import Arbitro, AsignacionPartido, Ciudad, Partido
 from ..services.auditoria import registrar_cambio
@@ -17,6 +18,7 @@ def listar_arbitros():
 
 
 @bp.post("/")
+@roles_required("super_admin", "admin")
 def crear_arbitro():
     datos = request.get_json(silent=True) or {}
     faltantes = [campo for campo in ("nombre", "apellido", "ciudad_origen_id") if not datos.get(campo)]
@@ -49,6 +51,7 @@ def _snapshot(arbitro):
 
 
 @bp.put("/<int:arbitro_id>")
+@roles_required("super_admin", "admin")
 def actualizar_arbitro(arbitro_id):
     arbitro = db.session.get(Arbitro, arbitro_id)
     if arbitro is None:
@@ -98,6 +101,7 @@ def actualizar_arbitro(arbitro_id):
 
 
 @bp.delete("/<int:arbitro_id>")
+@roles_required("super_admin", "admin")
 def desactivar_arbitro(arbitro_id):
     arbitro = db.session.get(Arbitro, arbitro_id)
     if arbitro is None:

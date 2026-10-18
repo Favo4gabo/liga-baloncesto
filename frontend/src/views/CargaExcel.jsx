@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
-import { API_URL } from '../App.jsx'
+import { apiFetch } from '../services/api.js'
 
 export default function CargaExcel({ embedded = false }) {
   const ref = useRef(null); const [file, setFile] = useState(null); const [loading, setLoading] = useState(false); const [result, setResult] = useState(null); const [error, setError] = useState('')
-  async function submit(event) { event.preventDefault(); if (!file) return setError('Selecciona un archivo Excel (.xlsx).'); setLoading(true); setError(''); setResult(null); try { const body = new FormData(); body.append('file', file); const response = await fetch(`${API_URL}/upload-excel`, { method: 'POST', body }); const json = await response.json(); if (!response.ok) throw new Error(json.error || 'No fue posible procesar el archivo.'); setResult(json) } catch (err) { setError(err.message) } finally { setLoading(false) } }
+  async function submit(event) { event.preventDefault(); if (!file) return setError('Selecciona un archivo Excel (.xlsx).'); setLoading(true); setError(''); setResult(null); try { const body = new FormData(); body.append('file', file); const response = await apiFetch('/upload-excel', { method: 'POST', body }); const json = await response.json(); if (!response.ok) throw new Error(json.error || 'No fue posible procesar el archivo.'); setResult(json) } catch (err) { setError(err.message) } finally { setLoading(false) } }
   return <>
     {!embedded && <div className="page-heading"><div><h2>Importar libro maestro</h2><p>Carga los catálogos, tarifas, árbitros y partidos de forma masiva.</p></div></div>}
     <div className="upload-layout"><section className="panel"><form onSubmit={submit} className="upload-dropzone"><div><div className="upload-icon">↥</div><h3>Sube el archivo Excel de la liga</h3><p>El sistema valida las hojas y guarda toda la información en una única transacción.</p><input ref={ref} id="excel" type="file" accept=".xlsx" onChange={e => setFile(e.target.files?.[0] || null)} /><button type="button" className="btn-primary-custom" onClick={() => ref.current?.click()}>Seleccionar archivo</button>{file && <p className="file-name">✓ {file.name}</p>}<div className="mt-3"><button type="submit" className="btn-primary-custom" disabled={loading}>{loading ? 'Procesando…' : 'Importar información'}</button></div></div></form></section>

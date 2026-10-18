@@ -40,6 +40,9 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash}
       BOT_WEBHOOK_TOKEN: ${BOT_WEBHOOK_TOKEN:-}
+      BCV_URL: ${BCV_URL:-https://www.bcv.org.ve/}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "5000:5000"
     volumes:
