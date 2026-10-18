@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestión de árbitros</title>
+    <style>
+      :root { font-family: system-ui, sans-serif; color: #172033; background: #f4f6fa; }
+      body { margin: 0; }
+      main { width: min(1100px, calc(100% - 32px)); margin: auto; padding: 32px 0 48px; }
+      header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+      .panel { background: white; border: 1px solid #dfe4ee; border-radius: 10px; margin-bottom: 24px; padding: 20px; }
+      form { display: flex; flex-wrap: wrap; gap: 12px; }
+      input { flex: 1 1 260px; }
+      button { border: 0; border-radius: 6px; background: #2563eb; color: white; cursor: pointer; padding: 9px 14px; }
+      .mensaje { flex-basis: 100%; margin: 0; }
+      .error { color: #b42318; }
+      .vacio { color: #667085; }
+      .tabla { overflow-x: auto; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border-bottom: 1px solid #e8ebf1; padding: 10px 8px; text-align: left; white-space: nowrap; }
+      th { background: #f8fafc; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Gestión de árbitros</h1>
+        <strong id="estado">Comprobando backend...</strong>
+      </header>
+
+      <section class="panel">
+        <h2>Cargar calendario Excel</h2>
+        <form id="formulario-excel">
+          <input id="archivo" name="file" type="file" accept=".xlsx" required>
+          <button type="submit">Cargar Excel</button>
+          <p id="mensaje-carga" class="mensaje" role="status"></p>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Partidos</h2>
+        <div class="tabla">
+          <table>
+            <thead><tr><th>Fecha</th><th>Estadio / cancha</th><th>Ciudad</th><th>Estado</th><th>Asignaciones</th><th>Viáticos</th></tr></thead>
+            <tbody id="tabla-partidos"></tbody>
+          </table>
+        </div>
+        <p id="sin-partidos" class="vacio">No hay partidos registrados.</p>
+      </section>
+    </main>
+    <script>
+      const estado = document.getElementById("estado");
+      const tabla = document.getElementById("tabla-partidos");
+      const sinPartidos = document.getElementById("sin-partidos");
+      const formulario = document.getElementById("formulario-excel");
+      const mensaje = document.getElementById("mensaje-carga");
+
+      function texto(valor) {
+        const nodo = document.createElement("span");
+        nodo.textContent = valor ?? "";
+        return nodo.innerHTML;
+      }
+
+      function dinero(valor) {
+        return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(valor || 0));
+      }
+
+      async function cargarPartidos() {
+        const respuesta = await fetch("/api/partidos");
+        if (!respuesta.ok) throw new Error("No se pudieron cargar los partidos.");
+        const partidos = await respuesta.json();
+        sinPartidos.hidden = partidos.length > 0;
+        tabla.innerHTML = partidos.map((partido) => {
+          const asignaciones = partido.asignaciones || [];
+          const total = asignaciones.reduce((suma, item) => suma + Number(item.costo_total || 0), 0);
+          return `<tr>
+            <td>${texto(new Date(partido.fecha_hora).toLocaleString("es-ES"))}</td>
+            <td>${texto(partido.estadio_cancha)}</td>
+            <td>${texto(partido.ciudad_juego?.nombre)}</td>
+            <td>${texto(partido.estado_partido)}</td>
+            <td>${asignaciones.length}</td>
+            <td>${dinero(total)}</td>
+          </tr>`;
+        }).join("");
+      }
+
+      async function cargarVista() {
+        const salud = await fetch("/api/health");
+        if (!salud.ok) throw new Error("El backend no respondió correctamente.");
+        estado.textContent = "Backend conectado";
+        await cargarPartidos();
+      }
+
+      formulario.addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+        const archivo = document.getElementById("archivo").files[0];
+        if (!archivo) return;
+        const datos = new FormData();
+        datos.append("file", archivo);
+        mensaje.className = "mensaje";
+        mensaje.textContent = "Cargando...";
+        try {
+          const respuesta = await fetch("/api/upload-excel", { method: "POST", body: datos });
+          const resultado = await respuesta.json();
+          if (!respuesta.ok) throw new Error(resultado.error || "No se pudo cargar el archivo.");
+          mensaje.textContent = "Archivo cargado correctamente.";
+          await cargarPartidos();
+        } catch (error) {
+          mensaje.className = "mensaje error";
+          mensaje.textContent = error.message;
+        }
+      });
+
+      cargarVista().catch((error) => {
+        estado.className = "error";
+        estado.textContent = error.message;
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+-- El juego de caracteres del servidor se configura en docker-compose.yml.

@@ -1,0 +1,63 @@
+services:
+  db:
+    image: mariadb:11
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    container_name: arbitros_db
+    restart: unless-stopped
+    environment:
+      MARIADB_USER: ${DB_USER:-liga_user}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-cambia_esta_password}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-cambia_esta_clave_root}
+      MARIADB_DATABASE: ${DB_NAME:-liga_arbitros_db}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u${DB_USER:-liga_user} -p${DB_PASSWORD:-cambia_esta_password} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: arbitros_backend
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_APP: app
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://liga_user:cambia_esta_password@db:3306/liga_arbitros_db?charset=utf8mb4}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@liga.local}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: arbitros_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
