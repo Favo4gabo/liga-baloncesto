@@ -54,6 +54,26 @@ id -nG
 
 ## 3. Levantar el proyecto
 
+### Windows (método recomendado)
+
+Abre Docker Desktop. Luego abre PowerShell en la raíz del proyecto y ejecuta:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+El script prepara `.env`, levanta los servicios, espera a que estén disponibles,
+carga la plantilla solo cuando no hay datos y abre la página automáticamente.
+Para ayuda y diagnósticos:
+
+```powershell
+.\scripts\dev.ps1 help
+.\scripts\dev.ps1 logs backend
+.\scripts\dev.ps1 reset
+```
+
+### Linux, macOS, Git Bash o WSL
+
 Entra a la carpeta del proyecto:
 
 ```bash
@@ -71,6 +91,9 @@ Levanta los tres servicios (base de datos, backend y frontend):
 ```bash
 docker compose up --build -d
 ```
+
+También puedes ejecutar `make demo` para realizar todos los pasos, incluida la
+carga inicial, de forma automática.
 
 - `--build`: construye las imágenes con el código actual (la primera vez tarda
   unos minutos).

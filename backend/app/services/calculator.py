@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from ..database import db
 from ..models import Arbitro, EstadoCercano, Parametro, Partido, TarifaHospedaje, TarifaTraslado
+from .travel import distancia_entre, medio_recomendado
 
 DOS_DECIMALES = Decimal("0.01")
 
@@ -25,14 +26,18 @@ def _estados_son_cercanos(estado_a_id: int, estado_b_id: int) -> bool:
 
 
 def determinar_medio_externo(arbitro: Arbitro, partido: Partido) -> str:
-    """Taxi si los estados son iguales o están configurados como cercanos; avión si no."""
+    """Prioriza la distancia configurada; conserva la regla de estados si aún no hay matriz."""
+    distancia = distancia_entre(arbitro.ciudad_origen_id, partido.ciudad_juego_id)
+    if distancia:
+        recomendado = medio_recomendado(distancia)
+        return "taxi" if recomendado == "local" else recomendado
     origen = arbitro.ciudad_origen.estado_id
     destino = partido.ciudad_juego.estado_id
     return "taxi" if origen == destino or _estados_son_cercanos(origen, destino) else "avion"
 
 
 def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noches: int = 1,
-                                 cantidad_dias: int = 1) -> dict[str, float | bool | str]:
+                                 cantidad_dias: int = 1, medio_transporte: str | None = None) -> dict[str, float | bool | str]:
     """Devuelve el desglose de ida/vuelta aplicando exclusivamente tarifas cargadas."""
     if isinstance(cantidad_noches, bool) or not isinstance(cantidad_noches, int) or cantidad_noches < 0:
         raise ValueError("cantidad_noches debe ser un entero mayor o igual a cero.")
@@ -49,7 +54,9 @@ def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noch
     estadia = Decimal("0")
     medio_externo = None
     if not misma_ciudad:
-        medio_externo = determinar_medio_externo(arbitro, partido)
+        if medio_transporte is not None and medio_transporte not in {"taxi", "avion"}:
+            raise ValueError("medio_transporte debe ser 'taxi' o 'avion'.")
+        medio_externo = medio_transporte or determinar_medio_externo(arbitro, partido)
         externo = _requerir_tarifa("externo", medio_externo) * 2  # ida y vuelta
         hotel = TarifaHospedaje.query.filter_by(ciudad_id=partido.ciudad_juego_id).first()
         if hotel is None:

@@ -5,6 +5,12 @@ import { API_URL } from '../App.jsx'
 const empty = { arbitros: [], partidos: [] }
 const dateText = (value) => value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'
 
+function AnimatedNumber({ value }) {
+  const [shown, setShown] = useState(0)
+  useEffect(() => { let frame; const started = performance.now(); const tick = (now) => { const progress = Math.min((now - started) / 650, 1); setShown(Math.round(value * (1 - (1 - progress) ** 3))); if (progress < 1) frame = requestAnimationFrame(tick) }; frame = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame) }, [value])
+  return shown
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(empty)
   const [error, setError] = useState('')
@@ -29,7 +35,7 @@ export default function Dashboard() {
   return <>
     <div className="page-heading"><div><h2>Resumen de la liga</h2><p>Consulta rápidamente la actividad y logística arbitral.</p></div></div>
     {error && <div className="error-notice">{error} Verifica que el backend esté activo.</div>}
-    <section className="metrics-grid">{cards.map(([icon, value, label]) => <article className="metric-card" key={label}><span className="metric-icon">{icon}</span><strong className="metric-value">{value}</strong><span className="metric-label">{label}</span></article>)}</section>
+    <section className="metrics-grid">{cards.map(([icon, value, label]) => <article className="metric-card" key={label}><span className="metric-icon">{icon}</span><strong className="metric-value"><AnimatedNumber value={value} /></strong><span className="metric-label">{label}</span></article>)}</section>
     <section className="panel">
       <header className="panel-header"><h3>Próximos partidos</h3><Link to="/calendario">Ver calendario completo →</Link></header>
       <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha y hora</th><th>Cancha / estadio</th><th>Ciudad sede</th><th>Árbitros</th><th>Estado</th></tr></thead>

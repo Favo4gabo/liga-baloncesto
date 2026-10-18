@@ -10,6 +10,7 @@ from ..models import (Arbitro, AsignacionPartido, Ciudad, ESTADOS_PAGO, ESTADOS_
                       Hospedaje, Pago, Partido, Traslado)
 from ..services.calculator import calcular_viaticos_asignacion
 from ..services.notifications import registrar_y_enviar_evento
+from ..services.travel import distancia_entre, planificar_logistica, ruta_aerea
 
 bp = Blueprint("partidos", __name__)
 
@@ -55,14 +56,26 @@ def crear_partido():
 def asignar_arbitro(partido_id):
     datos = request.get_json(silent=True) or {}
     arbitro_id = datos.get("arbitro_id")
-    if arbitro_id is None:
+    if isinstance(arbitro_id, bool) or not isinstance(arbitro_id, int):
         return jsonify({"error": "El campo 'arbitro_id' es obligatorio."}), 400
     if db.session.get(Partido, partido_id) is None or db.session.get(Arbitro, arbitro_id) is None:
         return jsonify({"error": "El partido o árbitro indicado no existe."}), 404
     try:
         viaticos = calcular_viaticos_asignacion(
-            arbitro_id, partido_id, datos.get("cantidad_noches", 1), datos.get("cantidad_dias", 1)
+            arbitro_id, partido_id, datos.get("cantidad_noches", 1), datos.get("cantidad_dias", 1),
+            datos.get("medio_transporte")
         )
+        partido = db.session.get(Partido, partido_id)
+        arbitro = db.session.get(Arbitro, arbitro_id)
+        distancia = distancia_entre(arbitro.ciudad_origen_id, partido.ciudad_juego_id)
+        medio = viaticos["medio_externo"] or "local"
+        ruta = ruta_aerea(arbitro.ciudad_origen.estado_id, partido.ciudad_juego.estado_id) if medio == "avion" else None
+        distancia_estimacion = ruta["distancia_aerea_km"] if ruta else distancia
+        plan = planificar_logistica(partido.fecha_hora, distancia_estimacion, medio, not viaticos["misma_ciudad"])
+        salida = _fecha_hora(datos["fecha_salida"]) if datos.get("fecha_salida") else _fecha_hora(plan["fecha_salida_origen_recomendada"])
+        llegada_ciudad = _fecha_hora(datos["fecha_llegada_ciudad"]) if datos.get("fecha_llegada_ciudad") else (_fecha_hora(plan["fecha_llegada_ciudad_recomendada"]) if plan["fecha_llegada_ciudad_recomendada"] else None)
+        if not viaticos["misma_ciudad"] and salida > _fecha_hora(plan["fecha_salida_origen_recomendada"]):
+            raise ValueError("La salida debe permitir llegar a la ciudad sede al menos un día antes del partido.")
         asignacion = AsignacionPartido(
             partido_id=partido_id,
             arbitro_id=arbitro_id,
@@ -71,8 +84,8 @@ def asignar_arbitro(partido_id):
             costo_estadia=viaticos["costo_estadia"],
             costo_viaticos=viaticos["costo_viaticos"],
             costo_total=viaticos["costo_total"],
-            fecha_salida=_fecha_hora(datos["fecha_salida"]) if datos.get("fecha_salida") else None,
-            fecha_llegada_ciudad=_fecha_hora(datos["fecha_llegada_ciudad"]) if datos.get("fecha_llegada_ciudad") else None,
+            fecha_salida=salida,
+            fecha_llegada_ciudad=llegada_ciudad,
         )
         db.session.add(asignacion)
         db.session.flush()

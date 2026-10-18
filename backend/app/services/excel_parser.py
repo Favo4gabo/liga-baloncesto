@@ -10,8 +10,8 @@ import unicodedata
 import pandas as pd
 
 from ..database import db
-from ..models import (Arbitro, Ciudad, Estado, EstadoCercano, Parametro, Partido,
-                      TarifaHospedaje, TarifaTraslado)
+from ..models import (Aeropuerto, Arbitro, Ciudad, Estado, EstadoCercano, Parametro, Partido,
+                       DistanciaCiudad, TarifaHospedaje, TarifaTraslado, UbicacionCancha)
 
 HOJAS = {
     "Estados": {"nombre"}, "Ciudades": {"nombre", "estado"},
@@ -20,6 +20,12 @@ HOJAS = {
     "EstadosCercanos": {"estado_a", "estado_b"},
     "Arbitros": {"nombre", "apellido", "telefono", "email", "ciudad_origen"},
     "Partidos": {"fecha_hora", "estadio_cancha", "ciudad_juego"},
+}
+
+HOJAS_OPCIONALES = {
+    "DistanciasCiudades": {"ciudad_origen", "ciudad_destino", "distancia_km"},
+    "UbicacionesCancha": {"estadio_cancha", "ciudad", "direccion", "latitud", "longitud"},
+    "Aeropuertos": {"estado", "ciudad_sede", "nombre", "codigo_iata", "latitud", "longitud"},
 }
 
 
@@ -50,12 +56,23 @@ def _decimal(valor: Any, campo: str) -> Decimal:
     return numero
 
 
+def _coordenada(valor: Any, campo: str, limite: Decimal) -> Decimal:
+    """Valida coordenadas: a diferencia de importes, longitud puede ser negativa."""
+    try:
+        numero = Decimal(str(_texto(valor, campo)))
+    except (InvalidOperation, ValueError) as error:
+        raise ValueError(f"El campo '{campo}' debe ser numérico.") from error
+    if not numero.is_finite() or abs(numero) > limite:
+        raise ValueError(f"El campo '{campo}' está fuera de rango.")
+    return numero
+
+
 def _filas(libro: dict[str, pd.DataFrame], hoja: str) -> list[dict[str, Any]]:
     marco = libro[hoja].copy()
     columnas = [_normalizar(columna) for columna in marco.columns]
     if len(columnas) != len(set(columnas)):
         raise ValueError(f"La hoja '{hoja}' tiene cabeceras duplicadas.")
-    faltantes = HOJAS[hoja] - set(columnas)
+    faltantes = (HOJAS.get(hoja) or HOJAS_OPCIONALES[hoja]) - set(columnas)
     if faltantes:
         raise ValueError(f"Faltan cabeceras en '{hoja}': {', '.join(sorted(faltantes))}.")
     marco.columns = columnas
@@ -81,8 +98,10 @@ def procesar_archivo_excel(archivo: bytes | bytearray | BinaryIO) -> dict[str, A
         if faltantes:
             raise ValueError("Faltan hojas requeridas: " + ", ".join(faltantes))
         datos = {hoja: _filas(libro, hoja) for hoja in HOJAS}
+        datos.update({hoja: _filas(libro, hoja) for hoja in HOJAS_OPCIONALES if hoja in libro})
         resumen = {"estados": 0, "ciudades": 0, "tarifas_traslado": 0, "tarifas_hospedaje": 0,
-                   "parametros": 0, "estados_cercanos": 0, "arbitros": 0, "partidos": 0}
+                   "parametros": 0, "estados_cercanos": 0, "arbitros": 0, "partidos": 0,
+                   "distancias_ciudades": 0, "ubicaciones_cancha": 0, "aeropuertos": 0}
 
         estados = {_normalizar(x.nombre): x for x in Estado.query.all()}
         for fila in datos["Estados"]:
@@ -104,6 +123,38 @@ def procesar_archivo_excel(archivo: bytes | bytearray | BinaryIO) -> dict[str, A
         ciudades_nombre = {_normalizar(x.nombre): x for x in ciudades.values()}
         if len(ciudades_nombre) != len(ciudades):
             raise ValueError("Hay ciudades repetidas en distintos estados; use nombres de ciudad únicos en este Excel.")
+        for fila in datos.get("Aeropuertos", []):
+            estado = _buscar(estados, fila["estado"], "estado")
+            iata = _texto(fila["codigo_iata"], "codigo_iata").upper()
+            if len(iata) != 3 or not iata.isalpha():
+                raise ValueError("Aeropuertos: codigo_iata debe tener tres letras.")
+            aeropuerto = Aeropuerto.query.filter_by(codigo_iata=iata).first() or Aeropuerto(codigo_iata=iata)
+            aeropuerto.estado_id = estado.id
+            aeropuerto.ciudad_sede = _texto(fila["ciudad_sede"], "ciudad_sede")
+            aeropuerto.nombre = _texto(fila["nombre"], "nombre")
+            aeropuerto.latitud = _coordenada(fila["latitud"], "latitud", Decimal("90"))
+            aeropuerto.longitud = _coordenada(fila["longitud"], "longitud", Decimal("180"))
+            aeropuerto.principal = True
+            db.session.add(aeropuerto); resumen["aeropuertos"] += 1
+        for fila in datos.get("DistanciasCiudades", []):
+            origen = _buscar(ciudades_nombre, fila["ciudad_origen"], "ciudad_origen")
+            destino = _buscar(ciudades_nombre, fila["ciudad_destino"], "ciudad_destino")
+            if origen.id == destino.id:
+                raise ValueError("DistanciasCiudades no admite una ciudad como origen y destino.")
+            menor, mayor = sorted((origen.id, destino.id))
+            distancia = DistanciaCiudad.query.filter_by(ciudad_origen_id=menor, ciudad_destino_id=mayor).first()
+            distancia = distancia or DistanciaCiudad(ciudad_origen_id=menor, ciudad_destino_id=mayor)
+            distancia.distancia_km = _decimal(fila["distancia_km"], "distancia_km")
+            db.session.add(distancia); resumen["distancias_ciudades"] += 1
+        for fila in datos.get("UbicacionesCancha", []):
+            ciudad = _buscar(ciudades_nombre, fila["ciudad"], "ciudad")
+            nombre = _texto(fila["estadio_cancha"], "estadio_cancha")
+            cancha = UbicacionCancha.query.filter_by(nombre_cancha=nombre, ciudad_id=ciudad.id).first()
+            cancha = cancha or UbicacionCancha(nombre_cancha=nombre, ciudad_id=ciudad.id)
+            cancha.direccion = _texto(fila["direccion"], "direccion", False)
+            cancha.latitud = _coordenada(fila["latitud"], "latitud", Decimal("90")) if not _vacio(fila["latitud"]) else None
+            cancha.longitud = _coordenada(fila["longitud"], "longitud", Decimal("180")) if not _vacio(fila["longitud"]) else None
+            db.session.add(cancha); resumen["ubicaciones_cancha"] += 1
 
         tarifas = {(x.tipo, x.medio): x for x in TarifaTraslado.query.all()}
         for fila in datos["TarifasTraslado"]:
