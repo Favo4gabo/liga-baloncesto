@@ -51,6 +51,9 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    # El volumen /app/node_modules puede sobrevivir a una reconstrucción y quedar
+    # desactualizado tras un git pull. Sincroniza dependencias antes de iniciar Vite.
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     ports:
       - "5173:5173"
     volumes:

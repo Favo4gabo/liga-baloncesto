@@ -26,16 +26,16 @@ export default function Dashboard() {
   const programados = data.partidos.filter((p) => p.estado_partido === 'Programado')
   const asignaciones = data.partidos.reduce((total, partido) => total + (partido.asignaciones?.length || 0), 0)
   const cards = [
-    ['♙', data.arbitros.filter((a) => a.activo).length, 'Árbitros activos'],
-    ['◫', data.partidos.length, 'Partidos registrados'],
-    ['◷', programados.length, 'Partidos programados'],
-    ['✓', asignaciones, 'Asignaciones realizadas'],
+    ['♙', data.arbitros.filter((a) => a.activo).length, 'Árbitros activos', '/arbitros'],
+    ['◫', data.partidos.length, 'Partidos registrados', '/partidos'],
+    ['◷', programados.length, 'Partidos programados', '/partidos/programados'],
+    ['✓', asignaciones, 'Asignaciones realizadas', '/asignaciones'],
   ]
 
   return <>
     <div className="page-heading"><div><h2>Resumen de la liga</h2><p>Consulta rápidamente la actividad y logística arbitral.</p></div></div>
     {error && <div className="error-notice">{error} Verifica que el backend esté activo.</div>}
-    <section className="metrics-grid">{cards.map(([icon, value, label]) => <article className="metric-card" key={label}><span className="metric-icon">{icon}</span><strong className="metric-value"><AnimatedNumber value={value} /></strong><span className="metric-label">{label}</span></article>)}</section>
+    <section className="metrics-grid">{cards.map(([icon, value, label, path]) => <Link className="metric-card metric-card-link" to={path} key={label} aria-label={`Ver detalle: ${label}`}><span className="metric-icon">{icon}</span><strong className="metric-value"><AnimatedNumber value={value} /></strong><span className="metric-label">{label}</span><span className="metric-card-action">Ver detalle <span aria-hidden="true">→</span></span></Link>)}</section>
     <section className="panel">
       <header className="panel-header"><h3>Próximos partidos</h3><Link to="/calendario">Ver calendario completo →</Link></header>
       <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha y hora</th><th>Cancha / estadio</th><th>Ciudad sede</th><th>Árbitros</th><th>Estado</th></tr></thead>

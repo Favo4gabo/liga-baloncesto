@@ -3,6 +3,7 @@ import Dashboard from './views/Dashboard.jsx'
 import Calendario from './views/Calendario.jsx'
 import CargaExcel from './views/CargaExcel.jsx'
 import Administracion from './views/Administracion.jsx'
+import MetricDetail from './views/MetricDetail.jsx'
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -38,6 +39,10 @@ export default function App() {
             <Route path="/calendario" element={<Calendario />} />
             <Route path="/carga" element={<CargaExcel />} />
             <Route path="/administracion" element={<Administracion />} />
+            <Route path="/arbitros" element={<MetricDetail />} />
+            <Route path="/partidos" element={<MetricDetail />} />
+            <Route path="/partidos/programados" element={<MetricDetail />} />
+            <Route path="/asignaciones" element={<MetricDetail />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>

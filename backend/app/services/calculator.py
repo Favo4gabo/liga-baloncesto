@@ -52,6 +52,7 @@ def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noch
     interno = _requerir_tarifa("interno", "taxi") * 2  # llegada y regreso cancha/hotel
     externo = Decimal("0")
     estadia = Decimal("0")
+    costo_hospedaje_por_noche = Decimal("0")
     medio_externo = None
     if not misma_ciudad:
         if medio_transporte is not None and medio_transporte not in {"taxi", "avion"}:
@@ -61,13 +62,19 @@ def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noch
         hotel = TarifaHospedaje.query.filter_by(ciudad_id=partido.ciudad_juego_id).first()
         if hotel is None:
             raise ValueError("Falta configurar la tarifa de hospedaje de la ciudad del partido.")
-        estadia = Decimal(str(hotel.costo_noche)) * cantidad_noches
+        costo_hospedaje_por_noche = Decimal(str(hotel.costo_noche))
+        estadia = costo_hospedaje_por_noche * cantidad_noches
     parametro = db.session.get(Parametro, "viatico_por_dia")
     if parametro is None:
         raise ValueError("Falta configurar el parámetro 'viatico_por_dia'.")
     viaticos = Decimal(str(parametro.valor)) * cantidad_dias
     total = externo + interno + estadia + viaticos
     return {"misma_ciudad": misma_ciudad, "medio_externo": medio_externo,
+            "cantidad_noches": cantidad_noches, "cantidad_dias_viaticos": cantidad_dias,
+            "costo_hospedaje_por_noche": _importe(costo_hospedaje_por_noche),
+            "viatico_por_dia": _importe(Decimal(str(parametro.valor))),
+            "costo_externo_por_trayecto": _importe(externo / 2),
+            "costo_interno_por_trayecto": _importe(interno / 2),
             "costo_traslado_externo": _importe(externo), "costo_traslado_interno": _importe(interno),
             "costo_estadia": _importe(estadia), "costo_viaticos": _importe(viaticos),
             "costo_total": _importe(total)}

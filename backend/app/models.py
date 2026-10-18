@@ -8,6 +8,7 @@ from .database import db
 ESTADOS_VIAJE = ("Asignado", "Confirmado", "En camino", "En ciudad", "En estadio", "Finalizado")
 ESTADOS_PAGO = ("Pendiente", "Pagado")
 ESTADOS_PARTIDO = ("Programado", "En curso", "Finalizado")
+ARBITROS_POR_PARTIDO = 2
 
 
 def _numero(valor):
@@ -163,7 +164,11 @@ class Partido(db.Model):
             datos["ciudad_juego"] = self.ciudad_juego.to_dict() if self.ciudad_juego else None
             cancha = UbicacionCancha.query.filter_by(nombre_cancha=self.estadio_cancha, ciudad_id=self.ciudad_juego_id).first()
             datos["ubicacion_cancha"] = cancha.to_dict() if cancha else None
-            datos["asignaciones"] = [a.to_dict(incluir_partido=False, incluir_detalle=True) for a in self.asignaciones]
+            asignaciones = [a.to_dict(incluir_partido=False, incluir_detalle=True) for a in self.asignaciones]
+            datos["asignaciones"] = asignaciones
+            datos["arbitros_requeridos"] = ARBITROS_POR_PARTIDO
+            datos["arbitros_asignados"] = len(asignaciones)
+            datos["asignacion_completa"] = len(asignaciones) == ARBITROS_POR_PARTIDO
         return datos
 
 
@@ -191,6 +196,7 @@ class AsignacionPartido(db.Model):
     traslados = db.relationship("Traslado", back_populates="asignacion", cascade="all, delete-orphan")
     hospedaje = db.relationship("Hospedaje", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
     pago = db.relationship("Pago", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
+    detalle_costos = db.relationship("DetalleCostoAsignacion", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
     eventos = db.relationship("EventoNotificacion", back_populates="asignacion", cascade="all, delete-orphan")
 
     def to_dict(self, incluir_partido=True, incluir_detalle=False):
@@ -208,6 +214,7 @@ class AsignacionPartido(db.Model):
             datos["traslados"] = [traslado.to_dict() for traslado in self.traslados]
             datos["hospedaje"] = self.hospedaje.to_dict() if self.hospedaje else None
             datos["pago"] = self.pago.to_dict() if self.pago else None
+            datos["detalle_costos"] = self.detalle_costos.to_dict() if self.detalle_costos else None
             externo = next((traslado for traslado in self.traslados if traslado.tipo == "externo" and traslado.sentido == "ida"), None)
             if self.arbitro and self.partido:
                 from .services.travel import calcular_tiempo_traslado, distancia_entre, planificar_logistica, ruta_aerea
@@ -220,6 +227,32 @@ class AsignacionPartido(db.Model):
                 datos["tiempo_traslado"]["ruta_aerea"] = ruta
                 datos["plan_logistico"] = planificar_logistica(self.partido.fecha_hora, distancia_estimacion, medio, externo is not None)
         return datos
+
+
+class DetalleCostoAsignacion(db.Model):
+    """Snapshot de cantidades y tarifas usadas para el cálculo de la asignación."""
+    __tablename__ = "detalle_costos_asignacion"
+    id = db.Column(db.Integer, primary_key=True)
+    asignacion_id = db.Column(db.Integer, db.ForeignKey("asignaciones_partido.id", ondelete="CASCADE"), nullable=False, unique=True)
+    cantidad_noches = db.Column(db.Integer, nullable=False, default=0)
+    costo_hospedaje_por_noche = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    cantidad_dias_viaticos = db.Column(db.Integer, nullable=False, default=1)
+    viatico_por_dia = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    costo_externo_por_trayecto = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    costo_interno_por_trayecto = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    medio_externo = db.Column(db.String(20))
+    asignacion = db.relationship("AsignacionPartido", back_populates="detalle_costos")
+
+    def to_dict(self):
+        return {
+            "cantidad_noches": self.cantidad_noches,
+            "costo_hospedaje_por_noche": _numero(self.costo_hospedaje_por_noche),
+            "cantidad_dias_viaticos": self.cantidad_dias_viaticos,
+            "viatico_por_dia": _numero(self.viatico_por_dia),
+            "costo_externo_por_trayecto": _numero(self.costo_externo_por_trayecto),
+            "costo_interno_por_trayecto": _numero(self.costo_interno_por_trayecto),
+            "medio_externo": self.medio_externo,
+        }
 
 
 class Traslado(db.Model):
