@@ -18,6 +18,7 @@ MAX_FILAS_CONFIRMACION = 250
 
 
 @bp.post("/escanear")
+@roles_required("super_admin", "admin")
 def escanear_horario():
     archivo = request.files.get("file")
     if archivo is None or not archivo.filename:
@@ -122,6 +123,7 @@ def confirmar_horario():
                 "cantidad_noches": fila.get("cantidad_noches", 1),
                 "cantidad_dias": fila.get("cantidad_dias", 1),
                 "medio_transporte": fila.get("medio_transporte") or None,
+                "viatico_por_dia": fila.get("viatico_por_dia"),
             }
             try:
                 asignacion = crear_asignacion(partido.id, opciones, commit=False)

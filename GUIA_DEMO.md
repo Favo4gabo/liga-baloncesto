@@ -62,8 +62,9 @@ Abre Docker Desktop. Luego abre PowerShell en la raíz del proyecto y ejecuta:
 .\scripts\dev.ps1
 ```
 
-El script prepara `.env`, levanta los servicios, espera a que estén disponibles,
-carga la plantilla solo cuando no hay datos y abre la página automáticamente.
+El script prepara `.env`, levanta los servicios, espera a que estén disponibles
+y abre la página automáticamente. En una base nueva, crea primero las dos
+cuentas propietarias siguiendo la sección de primer acceso.
 Para ayuda y diagnósticos:
 
 ```powershell
@@ -92,8 +93,7 @@ Levanta los tres servicios (base de datos, backend y frontend):
 docker compose up --build -d
 ```
 
-También puedes ejecutar `make demo` para realizar todos los pasos, incluida la
-carga inicial, de forma automática.
+También puedes ejecutar `make demo` para levantar los servicios y abrir la app.
 
 - `--build`: construye las imágenes con el código actual (la primera vez tarda
   unos minutos).
@@ -107,6 +107,20 @@ docker compose ps
 
 Debes ver los 3 contenedores en `Up`, y `arbitros_db` con `(healthy)`.
 
+### Crear las cuentas propietarias
+
+Con Docker ya activo, ejecuta dos veces el comando siguiente: una cuenta para
+cada propietario. La contraseña se escribe en modo oculto y debe tener al menos
+6 caracteres.
+
+```bash
+docker compose exec backend flask create-superadmin
+docker compose exec backend flask create-superadmin
+```
+
+Después inicia sesión en `http://localhost:5173`. El menú **Usuarios y permisos**
+permite crear las cuentas de administrador, contable y consulta.
+
 ---
 
 ## 4. Generar y cargar datos de ejemplo
@@ -117,10 +131,10 @@ Genera la plantilla Excel de ejemplo:
 docker compose exec -T backend python scripts/generar_plantilla.py /app/plantilla_liga.xlsx
 ```
 
-El archivo quedará en tu carpeta como `backend/plantilla_liga.xlsx`.
-
-Luego, en la interfaz web: menú **Importar Excel** → selecciona
-`backend/plantilla_liga.xlsx` → **Importar información**.
+El archivo quedará en tu carpeta como `backend/plantilla_liga.xlsx`. Inicia sesión,
+abre **Importar archivos** y elige la pestaña **Libro maestro** para cargarlo.
+La pestaña **Leer horario** previsualiza Excel, CSV o imagen y requiere revisión
+antes de registrar los partidos y asignaciones.
 
 ---
 
@@ -134,7 +148,10 @@ http://localhost:5173
 
 - **Resumen**: métricas y próximos partidos.
 - **Calendario**: partidos por fecha, sede y árbitros asignados.
-- **Importar Excel**: carga masiva de datos.
+- **Importar archivos**: libro maestro y revisión de horarios.
+- **Administración**: gestión de árbitros y canchas.
+- **Finanzas e informes**: presupuesto, gastos reales, gráficas y exportaciones según perfil.
+- **Usuarios y permisos**: disponible solo para superadministradores.
 
 ---
 
@@ -145,7 +162,7 @@ docker compose ps                     # estado de los contenedores
 docker compose logs -f backend        # logs del backend en vivo (Ctrl+C para salir)
 docker compose logs -f frontend       # logs del frontend en vivo
 curl -s http://localhost:5000/api/health   # probar la API
-curl -s http://localhost:5000/api/partidos # ver partidos cargados
+curl -s http://localhost:5000/api/partidos # requiere sesión; consulta partidas desde la app
 ```
 
 ---

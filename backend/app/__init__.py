@@ -6,8 +6,10 @@ Sistema de gestión y logística de árbitros de baloncesto.
 import os
 import hmac
 from datetime import timedelta
+from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 from flask import Flask, g, jsonify, render_template, request, session
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -16,6 +18,10 @@ from .database import db, init_db
 from .models import Usuario
 from .routes import register_blueprints
 from .routes.auth import password_error
+
+
+# Carga el .env para desarrollo local; las variables inyectadas por Docker tienen prioridad.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 def create_app(config: dict | None = None) -> Flask:

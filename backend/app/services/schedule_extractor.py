@@ -1,6 +1,7 @@
 """Extracción de horarios Excel/CSV/imagen con sugerencias de catálogo."""
 
 import io
+import os
 import re
 import unicodedata
 from datetime import date, datetime, time
@@ -9,7 +10,7 @@ from difflib import SequenceMatcher
 import pandas as pd
 
 from ..models import Arbitro, Ciudad, UbicacionCancha
-from .vision import extraer_filas_imagen
+from .vision import extraer_filas_excel_texto, extraer_filas_imagen
 
 
 ALIAS = {
@@ -26,6 +27,11 @@ def _limpiar_texto(valor) -> str:
     if valor is None or pd.isna(valor):
         return ""
     return str(valor).strip()
+
+
+def _texto_compacto(valor) -> str:
+    """Normaliza saltos y espacios que suelen aparecer en celdas pegadas desde Excel."""
+    return re.sub(r"\s+", " ", _limpiar_texto(valor))
 
 
 def _clave(valor: str) -> str:
@@ -94,6 +100,98 @@ def _leer_tabular(contenido: bytes, extension: str):
         raise ValueError(f"No se pudo leer el archivo tabular: {error}") from error
 
 
+def _normalizar_filas_excel(contenido: bytes) -> list[dict]:
+    """Busca tablas de partidos en cualquier hoja y fila del libro.
+
+    Muchos libros de liga agrupan varios catálogos en bloques de una sola hoja;
+    por eso no se puede asumir que la fila 1 sea la cabecera del horario.
+    """
+    try:
+        hojas = pd.read_excel(io.BytesIO(contenido), sheet_name=None, header=None, dtype=object)
+    except Exception as error:
+        raise ValueError(f"No se pudo leer el archivo Excel: {error}") from error
+
+    filas = []
+    for nombre_hoja, hoja in hojas.items():
+        for indice_cabecera, serie in hoja.iterrows():
+            valores = [_texto_compacto(valor) for valor in serie.tolist()]
+            indices_columnas = [indice for indice, valor in enumerate(valores) if valor]
+            columnas = [valores[indice] for indice in indices_columnas]
+            mapa = {tipo: _columna(columnas, tipo) for tipo in ALIAS}
+            if not (mapa["fecha"] or mapa["fecha_hora"]) or not mapa["cancha"]:
+                continue
+
+            registros = []
+            for indice_fila in range(indice_cabecera + 1, len(hoja)):
+                valores_fila = hoja.iloc[indice_fila].tolist()
+                registro = {
+                    columna: valores_fila[indice]
+                    for indice, columna in zip(indices_columnas, columnas)
+                    if indice < len(valores_fila)
+                }
+                # Los bloques del Excel de ejemplo están separados por una fila vacía.
+                if not any(not _vacio_excel(valor) for valor in valores_fila):
+                    if registros:
+                        break
+                    continue
+                registros.append(registro)
+            if registros:
+                frame = pd.DataFrame(registros, columns=columnas)
+                frame.index = range(indice_cabecera, indice_cabecera + len(frame))
+                bloque = _normalizar_filas_tabulares(frame)
+                for fila in bloque:
+                    fila["hoja_origen"] = nombre_hoja
+                    filas.append(fila)
+                # No volver a interpretar como encabezado el contenido de este bloque.
+                break
+    if not filas:
+        raise ValueError(
+            "No encontré una tabla de partidos en el Excel. Se requiere una fila de encabezados "
+            "con fecha, cancha/estadio y, si están disponibles, hora, árbitro y ciudad."
+        )
+    return filas
+
+
+def _vacio_excel(valor) -> bool:
+    return valor is None or pd.isna(valor) or (isinstance(valor, str) and not valor.strip())
+
+
+def _texto_completo_excel(contenido: bytes) -> str:
+    """Serializa todas las hojas para que la IA pueda asociar tablas del libro."""
+    hojas = pd.read_excel(io.BytesIO(contenido), sheet_name=None, header=None, dtype=object)
+    secciones = []
+    for nombre, hoja in hojas.items():
+        lineas = []
+        for valores in hoja.itertuples(index=False, name=None):
+            celdas = [f"{indice + 1}={_limpiar_texto(valor)}" for indice, valor in enumerate(valores) if not _vacio_excel(valor)]
+            if celdas:
+                lineas.append(" | ".join(celdas))
+        secciones.append(f"HOJA: {nombre}\n" + "\n".join(lineas))
+    return "\n\n".join(secciones)
+
+
+def _filas_desde_ia(resultado: dict) -> list[dict]:
+    filas = []
+    for indice, item in enumerate(resultado.get("filas", []), start=1):
+        if not isinstance(item, dict):
+            continue
+        fecha, hora = _fecha_hora(item.get("fecha") or item.get("fecha_hora"), item.get("hora"))
+        fila = {
+            "fila_origen": indice,
+            "fecha": fecha,
+            "hora": hora,
+            "arbitro_texto": _limpiar_texto(item.get("arbitro") or item.get("referee")),
+            "cancha_texto": _limpiar_texto(item.get("cancha") or item.get("estadio") or item.get("venue")),
+            "ciudad_texto": _limpiar_texto(item.get("ciudad") or item.get("city")),
+            "_confianza_origen": item.get("confianza", 0.65),
+        }
+        for campo in ("cantidad_dias", "cantidad_noches", "viatico_por_dia", "presupuesto", "notas"):
+            if item.get(campo) is not None:
+                fila[campo] = item[campo]
+        filas.append(fila)
+    return filas
+
+
 def _mejor_coincidencia(texto: str, opciones, etiqueta) -> tuple[int | None, float]:
     consulta = _clave(texto)
     if not consulta:
@@ -159,9 +257,9 @@ def _normalizar_filas_tabulares(frame) -> list[dict]:
             "fila_origen": int(indice) + 2,
             "fecha": fecha,
             "hora": hora,
-            "arbitro_texto": _limpiar_texto(registro.get(mapa["arbitro"])) if mapa["arbitro"] else "",
-            "cancha_texto": _limpiar_texto(registro.get(mapa["cancha"])) if mapa["cancha"] else "",
-            "ciudad_texto": _limpiar_texto(registro.get(mapa["ciudad"])) if mapa["ciudad"] else "",
+            "arbitro_texto": _texto_compacto(registro.get(mapa["arbitro"])) if mapa["arbitro"] else "",
+            "cancha_texto": _texto_compacto(registro.get(mapa["cancha"])) if mapa["cancha"] else "",
+            "ciudad_texto": _texto_compacto(registro.get(mapa["ciudad"])) if mapa["ciudad"] else "",
         }
         if not any(fila[campo] for campo in ("fecha", "hora", "arbitro_texto", "cancha_texto", "ciudad_texto")):
             continue
@@ -183,7 +281,38 @@ def extraer_horario_arbitro(archivo_o_imagen, filename: str | None = None) -> di
     extension = f".{extension}" if extension else ""
     advertencias, proveedor, modelo = [], "tabular", None
 
-    if extension in {".xlsx", ".csv"}:
+    if extension == ".xlsx":
+        error_ia = None
+        if os.getenv("VISION_PROVIDER", "simulado").strip().lower() not in {"simulado", "emulado", "local"}:
+            try:
+                resultado_ia = extraer_filas_excel_texto(_texto_completo_excel(bytes(contenido)))
+                origen = _filas_desde_ia(resultado_ia)
+                proveedor, modelo = resultado_ia["proveedor"], resultado_ia.get("modelo")
+                advertencias.extend(resultado_ia.get("advertencias", []))
+                if not origen:
+                    raise ValueError("La IA no identificó filas de partidos en el libro.")
+            except ValueError as error:
+                error_ia = error
+                origen = []
+        else:
+            origen = []
+        if not origen:
+            try:
+                origen = _normalizar_filas_excel(bytes(contenido))
+                proveedor, modelo = "lectura local", None
+                if error_ia:
+                    advertencias.append(
+                        f"No se pudo usar la IA ({error_ia}). Se aplicó la detección local por encabezados. "
+                        "Revisa cuidadosamente los datos antes de confirmar."
+                    )
+            except ValueError as error_local:
+                if error_ia:
+                    raise ValueError(
+                        f"La IA no pudo interpretar el libro ({error_ia}) y la lectura local tampoco encontró "
+                        f"una tabla reconocible ({error_local}). Revisa el archivo o completa la plantilla manualmente."
+                    ) from error_local
+                raise
+    elif extension == ".csv":
         origen = _normalizar_filas_tabulares(_leer_tabular(bytes(contenido), extension))
     elif extension in {".png", ".jpg", ".jpeg"}:
         mime_type = "image/png" if extension == ".png" else "image/jpeg"

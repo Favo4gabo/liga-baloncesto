@@ -37,7 +37,8 @@ def determinar_medio_externo(arbitro: Arbitro, partido: Partido) -> str:
 
 
 def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noches: int = 1,
-                                 cantidad_dias: int = 1, medio_transporte: str | None = None) -> dict[str, float | bool | str]:
+                                 cantidad_dias: int = 1, medio_transporte: str | None = None,
+                                 viatico_por_dia: Decimal | float | str | None = None) -> dict[str, float | bool | str]:
     """Devuelve el desglose de ida/vuelta aplicando exclusivamente tarifas cargadas."""
     if isinstance(cantidad_noches, bool) or not isinstance(cantidad_noches, int) or cantidad_noches < 0:
         raise ValueError("cantidad_noches debe ser un entero mayor o igual a cero.")
@@ -65,14 +66,17 @@ def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noch
         costo_hospedaje_por_noche = Decimal(str(hotel.costo_noche))
         estadia = costo_hospedaje_por_noche * cantidad_noches
     parametro = db.session.get(Parametro, "viatico_por_dia")
-    if parametro is None:
+    if parametro is None and viatico_por_dia is None:
         raise ValueError("Falta configurar el parámetro 'viatico_por_dia'.")
-    viaticos = Decimal(str(parametro.valor)) * cantidad_dias
+    importe_viatico = Decimal(str(viatico_por_dia if viatico_por_dia is not None else parametro.valor))
+    if not importe_viatico.is_finite() or importe_viatico < 0:
+        raise ValueError("viatico_por_dia debe ser un importe válido no negativo.")
+    viaticos = importe_viatico * cantidad_dias
     total = externo + interno + estadia + viaticos
     return {"misma_ciudad": misma_ciudad, "medio_externo": medio_externo,
             "cantidad_noches": cantidad_noches, "cantidad_dias_viaticos": cantidad_dias,
             "costo_hospedaje_por_noche": _importe(costo_hospedaje_por_noche),
-            "viatico_por_dia": _importe(Decimal(str(parametro.valor))),
+            "viatico_por_dia": _importe(importe_viatico),
             "costo_externo_por_trayecto": _importe(externo / 2),
             "costo_interno_por_trayecto": _importe(interno / 2),
             "costo_traslado_externo": _importe(externo), "costo_traslado_interno": _importe(interno),

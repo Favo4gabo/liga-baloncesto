@@ -203,6 +203,7 @@ class AsignacionPartido(db.Model):
     detalle_costos = db.relationship("DetalleCostoAsignacion", back_populates="asignacion", uselist=False, cascade="all, delete-orphan")
     eventos = db.relationship("EventoNotificacion", back_populates="asignacion", cascade="all, delete-orphan")
     gastos_reales = db.relationship("GastoReal", back_populates="asignacion", cascade="all, delete-orphan")
+    gastos_extra = db.relationship("GastoExtra", back_populates="asignacion", cascade="all, delete-orphan")
 
     def to_dict(self, incluir_partido=True, incluir_detalle=False):
         datos = {"id": self.id, "partido_id": self.partido_id, "arbitro_id": self.arbitro_id,
@@ -210,6 +211,12 @@ class AsignacionPartido(db.Model):
                  "costo_traslado_externo": _numero(self.costo_traslado_externo), "costo_traslado_interno": _numero(self.costo_traslado_interno),
                  "costo_estadia": _numero(self.costo_estadia), "costo_viaticos": _numero(self.costo_viaticos), "costo_total": _numero(self.costo_total),
                  "arbitro": self.arbitro.to_dict() if self.arbitro else None}
+        datos["gastos_extra_aprobados"] = sum(
+            _numero(gasto.monto) for gasto in self.gastos_extra if gasto.estado == "Aprobado"
+        )
+        datos["gastos_extra_pendientes"] = [
+            gasto.to_dict() for gasto in self.gastos_extra if gasto.estado == "Pendiente"
+        ]
         for campo in ("fecha_salida", "fecha_llegada_ciudad", "fecha_llegada_estadio", "fecha_fin_partido", "fecha_salida_regreso", "fecha_llegada_regreso"):
             valor = getattr(self, campo)
             datos[campo] = valor.isoformat() if valor else None
@@ -454,4 +461,52 @@ class TasaCambioBCV(db.Model):
             "ves_por_usd": _numero(self.ves_por_usd),
             "fuente": self.fuente,
             "url_fuente": self.url_fuente,
+        }
+
+class TelegramVinculacion(db.Model):
+    """Vincula una cuenta de Telegram verificada con un árbitro del catálogo."""
+    __tablename__ = "telegram_vinculaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    arbitro_id = db.Column(db.Integer, db.ForeignKey("arbitros.id", ondelete="CASCADE"), nullable=False, unique=True)
+    telegram_user_id = db.Column(db.String(64), nullable=False, unique=True)
+    chat_id = db.Column(db.String(64), nullable=False)
+    accion_pendiente = db.Column(db.String(30))
+    asignacion_pendiente_id = db.Column(db.Integer, db.ForeignKey("asignaciones_partido.id", ondelete="SET NULL"))
+    creado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    actualizado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GastoExtra(db.Model):
+    """Gasto comunicado por el árbitro; solo impacta el total al aprobarse."""
+    __tablename__ = "gastos_extra"
+    id = db.Column(db.Integer, primary_key=True)
+    asignacion_id = db.Column(db.Integer, db.ForeignKey("asignaciones_partido.id", ondelete="CASCADE"), nullable=False, index=True)
+    arbitro_id = db.Column(db.Integer, db.ForeignKey("arbitros.id", ondelete="RESTRICT"), nullable=False)
+    monto = db.Column(db.Numeric(12, 2), nullable=False)
+    moneda = db.Column(db.String(3), nullable=False, default="USD")
+    concepto = db.Column(db.String(80), nullable=False)
+    descripcion = db.Column(db.String(500))
+    telegram_file_id = db.Column(db.String(255))
+    estado = db.Column(db.String(20), nullable=False, default="Pendiente")
+    reportado_en = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    revisado_en = db.Column(db.DateTime)
+    revisado_por_telegram_id = db.Column(db.String(64))
+    comentario_revision = db.Column(db.String(500))
+    asignacion = db.relationship("AsignacionPartido", back_populates="gastos_extra")
+    arbitro = db.relationship("Arbitro")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "asignacion_id": self.asignacion_id,
+            "arbitro_id": self.arbitro_id,
+            "arbitro": f"{self.arbitro.nombre} {self.arbitro.apellido}" if self.arbitro else None,
+            "monto": _numero(self.monto),
+            "moneda": self.moneda,
+            "concepto": self.concepto,
+            "descripcion": self.descripcion,
+            "estado": self.estado,
+            "reportado_en": self.reportado_en.isoformat() if self.reportado_en else None,
+            "revisado_en": self.revisado_en.isoformat() if self.revisado_en else None,
+            "comentario_revision": self.comentario_revision,
         }

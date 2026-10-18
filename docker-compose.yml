@@ -39,6 +39,10 @@ services:
       VISION_PROVIDER: ${VISION_PROVIDER:-simulado}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS:-}
       BOT_WEBHOOK_TOKEN: ${BOT_WEBHOOK_TOKEN:-}
       BCV_URL: ${BCV_URL:-https://www.bcv.org.ve/}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
@@ -68,6 +72,21 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  telegram-bot:
+    build:
+      context: ./backend
+    container_name: arbitros_telegram_bot
+    command: python -m app.telegram_bot
+    restart: unless-stopped
+    profiles: ["telegram"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://liga_user:cambia_esta_password@db:3306/liga_arbitros_db?charset=utf8mb4}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS:-}
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:

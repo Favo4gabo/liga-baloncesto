@@ -225,6 +225,29 @@ body { margin: 0; min-width: 320px; background: #f4f7fb; }
 :root[data-theme='dark'] .calendar-card [class*='fc-classic-'] { color: var(--text); }
 :root[data-theme='dark'] .calendar-card .fc-classic-AVD.fc-classic-DIS { color: #ecf4fb !important; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.25; letter-spacing: .01em; }
 :root[data-theme='dark'] .calendar-card .fc .fc-toolbar-title { color: #ecf4fb !important; }
+
+.assignment-name { min-width: 0; }
+.referee-hover { position: relative; cursor: help; }
+.referee-hover:hover::after,
+.referee-hover:focus-within::after {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 7px);
+  left: 0;
+  min-width: 190px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #182536;
+  color: #fff;
+  content: attr(title);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 5px 14px rgb(24 37 54 / 18%);
+}
+.assignment-edit-button { margin-top: 7px; border: 0; padding: 0; background: transparent; color: #21679e; font-size: 11px; font-weight: 700; cursor: pointer; }
+.assignment-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 8px 0; }
+.assignment-edit select { min-width: 180px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.assignment-edit .form-error { flex-basis: 100%; }
 :root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-'] { border-color: var(--fc-classic-border); }
 :root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-']:is(th, td) { background-color: var(--fc-classic-background); }
 :root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-AVD'] { text-shadow: none; }

@@ -24,7 +24,9 @@ CATEGORIAS = (
     ("transporte_interno", "Transporte interno", "costo_traslado_interno"),
     ("hospedaje", "Hospedaje", "costo_estadia"),
     ("viaticos", "Viáticos", "costo_viaticos"),
+    ("gastos_extra", "Gastos extra aprobados", None),
 )
+CATEGORIAS_GASTO_REAL = {"transporte_externo", "transporte_interno", "hospedaje", "viaticos"}
 GRUPOS = {"arbitro", "partido", "ciudad", "temporada"}
 ROLES_DESCARGA = ("super_admin", "admin", "accountant")
 
@@ -76,24 +78,36 @@ def _movimientos(args):
         query = query.filter(Partido.fecha_hora >= datetime.combine(desde, time.min))
     if hasta:
         query = query.filter(Partido.fecha_hora < datetime.combine(hasta + timedelta(days=1), time.min))
-    ciudad_id = args.get("ciudad_id", type=int)
+    def optional_int(field):
+        raw = args.get(field)
+        if raw in (None, ""):
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{field} debe ser un entero.") from error
+        if str(value) != str(raw).strip():
+            raise ValueError(f"{field} debe ser un entero.")
+        return value
+
+    ciudad_id = optional_int("ciudad_id")
     if ciudad_id:
         query = query.filter(Partido.ciudad_juego_id == ciudad_id)
 
-    arbitro_id = args.get("arbitro_id", type=int)
+    arbitro_id = optional_int("arbitro_id")
     tasas_cache = {}
     movimientos = []
     for partido in query.all():
         for asignacion in partido.asignaciones:
             if arbitro_id and asignacion.arbitro_id != arbitro_id:
                 continue
-            pago = asignacion.pago
-            esta_pagado = bool(pago and pago.estado == "Pagado")
-            fecha_conversion = pago.fecha_pago.date() if esta_pagado and pago.fecha_pago else date.today()
+            # El presupuesto se convierte con la tasa vigente el día del partido;
+            # el gasto real usa su propia fecha de factura/gasto más abajo.
+            fecha_conversion = min(partido.fecha_hora.date(), date.today())
             tasa = _tasa_cache(fecha_conversion, tasas_cache)
             rate = Decimal(str(tasa.ves_por_usd)) if tasa else None
-            costos_usd = {key: Decimal(str(getattr(asignacion, column) or 0)) for key, _, column in CATEGORIAS}
-            total_usd = Decimal(str(asignacion.costo_total or 0))
+            costos_usd = {key: Decimal(str(getattr(asignacion, column) or 0)) if column else Decimal("0") for key, _, column in CATEGORIAS}
+            total_usd = sum((costos_usd[key] for key, _, column in CATEGORIAS if column), Decimal("0"))
             costos_ves = {key: amount * rate for key, amount in costos_usd.items()} if rate else None
             total_ves = total_usd * rate if rate else None
             gastos_reales = [gasto for gasto in asignacion.gastos_reales if not gasto.anulado]
@@ -118,8 +132,43 @@ def _movimientos(args):
                     real_sin_tasa += 1
                 gastos_reales_data.append({
                     **gasto.to_dict(),
+                    "tipo": "gasto_real",
                     "tasa_fecha": tasa_actual.fecha.isoformat() if tasa_actual else (gasto.fecha_gasto.isoformat() if gasto.moneda == "VES" and gasto.tasa_bcv else None),
                     "monto_ves": float(amount_ves.quantize(Decimal("0.01"))) if amount_ves is not None else None,
+                })
+            gastos_extra_aprobados = [extra for extra in asignacion.gastos_extra if extra.estado == "Aprobado"]
+            gastos_extra_pendientes = [extra.to_dict() for extra in asignacion.gastos_extra if extra.estado == "Pendiente"]
+            for extra in gastos_extra_aprobados:
+                if extra.moneda == "VES":
+                    tasa_extra = _tasa_cache(extra.reportado_en.date(), tasas_cache)
+                    extra_rate = Decimal(str(tasa_extra.ves_por_usd)) if tasa_extra else None
+                    extra_usd = Decimal(str(extra.monto)) / extra_rate if extra_rate else Decimal("0")
+                    extra_ves = Decimal(str(extra.monto)) if extra_rate else None
+                else:
+                    tasa_extra = _tasa_cache(extra.reportado_en.date(), tasas_cache)
+                    extra_rate = Decimal(str(tasa_extra.ves_por_usd)) if tasa_extra else None
+                    extra_usd = Decimal(str(extra.monto))
+                    extra_ves = extra_usd * extra_rate if extra_rate else None
+                real_usd["gastos_extra"] += extra_usd
+                if extra_ves is None:
+                    real_sin_tasa += 1
+                else:
+                    real_ves["gastos_extra"] += extra_ves
+                gastos_reales_data.append({
+                    "id": extra.id,
+                    "tipo": "gasto_extra",
+                    "asignacion_id": asignacion.id,
+                    "categoria": "gastos_extra",
+                    "fecha_gasto": extra.reportado_en.date().isoformat(),
+                    "monto_original": float(Decimal(str(extra.monto))),
+                    "moneda": extra.moneda,
+                    "monto_usd": float(extra_usd.quantize(Decimal("0.01"))),
+                    "monto_ves": float(extra_ves.quantize(Decimal("0.01"))) if extra_ves is not None else None,
+                    "tasa_bcv": float(extra_rate) if extra_rate else None,
+                    "tasa_fecha": tasa_extra.fecha.isoformat() if tasa_extra else None,
+                    "descripcion": f"{extra.concepto}: {extra.descripcion or ''}".strip(),
+                    "referencia_documento": None,
+                    "anulado": False,
                 })
             real_total_usd = sum(real_usd.values(), Decimal("0"))
             real_total_ves = sum(real_ves.values(), Decimal("0")) if real_sin_tasa == 0 else None
@@ -142,14 +191,15 @@ def _movimientos(args):
                 "total_usd": float(total_usd),
                 "costos_ves": {key: float(value.quantize(Decimal("0.01"))) for key, value in costos_ves.items()} if costos_ves else None,
                 "total_ves": float(total_ves.quantize(Decimal("0.01"))) if total_ves is not None else None,
-                "conversion_estimada": not esta_pagado,
+                "conversion_estimada": partido.fecha_hora.date() > date.today() or tasa is None,
                 "real_usd": {key: float(value) for key, value in real_usd.items()},
                 "real_ves": {key: float(value.quantize(Decimal("0.01"))) for key, value in real_ves.items()},
                 "total_real_usd": float(real_total_usd),
                 "total_real_ves": float(real_total_ves.quantize(Decimal("0.01"))) if real_total_ves is not None else None,
-                "variacion_usd": float(real_total_usd - total_usd) if gastos_reales else None,
+                "variacion_usd": float(real_total_usd - total_usd) if gastos_reales_data else None,
                 "gastos_reales": gastos_reales_data,
-                "cantidad_gastos_reales": len(gastos_reales),
+                "gastos_extra_pendientes": gastos_extra_pendientes,
+                "cantidad_gastos_reales": len(gastos_reales_data),
                 "gastos_reales_sin_tasa": real_sin_tasa,
             })
     return movimientos
@@ -208,7 +258,7 @@ def _agrupar(movimientos, grupo):
     grouped = {}
     for item in movimientos:
         key, label = getters[grupo](item)
-        row = grouped.setdefault(key, {"id": key, "nombre": label, "asignaciones": 0, "usd": 0.0, "ves": 0.0, "real_usd": 0.0, "real_ves": 0.0, "variacion_usd": 0.0, "gastos_reales": 0, "sin_tasa_real": 0, "sin_registro_real": True, **{k: 0.0 for k, _, _ in CATEGORIAS}})
+        row = grouped.setdefault(key, {"id": key, "nombre": label, "asignaciones": 0, "usd": 0.0, "ves": 0.0, "real_usd": 0.0, "real_ves": 0.0, "variacion_usd": 0.0, "gastos_reales": 0, "sin_tasa_real": 0, "sin_registro_real": True, **{k: 0.0 for k, _, _ in CATEGORIAS}, **{f"real_{k}": 0.0 for k, _, _ in CATEGORIAS}})
         row["asignaciones"] += 1
         row["usd"] += item["total_usd"]
         row["real_usd"] += item["total_real_usd"]
@@ -222,6 +272,7 @@ def _agrupar(movimientos, grupo):
             row["real_ves"] += item["total_real_ves"]
         for category, _, _ in CATEGORIAS:
             row[category] += item["costos_usd"][category]
+            row[f"real_{category}"] += item["real_usd"][category]
     for row in grouped.values():
         row["variacion_usd"] = row["real_usd"] - row["usd"] if not row["sin_registro_real"] else None
         if row["sin_tasa_real"]:
@@ -267,7 +318,7 @@ def registrar_gasto_real():
         fecha_gasto = date.fromisoformat(str(datos.get("fecha_gasto", "")))
         monto = Decimal(str(datos.get("monto", "")))
         moneda = str(datos.get("moneda", "USD")).upper()
-        if categoria not in {key for key, _, _ in CATEGORIAS}:
+        if categoria not in CATEGORIAS_GASTO_REAL:
             raise ValueError("Selecciona una categoría logística válida.")
         if not monto.is_finite() or monto <= 0:
             raise ValueError("El gasto real debe ser mayor que cero.")
@@ -395,16 +446,16 @@ def exportar_excel():
     hoja.append(["ArbiLiga · Informe financiero", "Moneda base USD; VES usa la tasa BCV efectiva en fecha de pago"])
     hoja.append(["Agrupación", request.args.get("agrupar", "arbitro"), "Filtro mes", request.args.get("mes", "Todos")])
     hoja.append([])
-    encabezados = ["Referencia", "Asignaciones", "Externo presupuesto USD", "Interno presupuesto USD", "Hospedaje presupuesto USD", "Viáticos presupuesto USD", "Presupuesto USD", "Gasto real USD", "Variación USD", "Gasto real VES", "Registros sin tasa"]
+    encabezados = ["Referencia", "Asignaciones", "Presupuesto externo USD", "Presupuesto interno USD", "Presupuesto hospedaje USD", "Presupuesto viáticos USD", "Presupuesto total USD", "Real externo USD", "Real interno USD", "Real hospedaje USD", "Real viáticos USD", "Extras aprobados USD", "Gasto real total USD", "Variación USD", "Gasto real VES", "Registros sin tasa"]
     hoja.append(encabezados)
     for celda in hoja[4]:
         celda.font = Font(color="FFFFFF", bold=True)
         celda.fill = PatternFill("solid", fgColor="17365D")
     for row in agrupados:
-        hoja.append([row["nombre"], row["asignaciones"], row["transporte_externo"], row["transporte_interno"], row["hospedaje"], row["viaticos"], row["usd"], row["real_usd"], row["variacion_usd"], row["real_ves"], row["sin_tasa_real"]])
+        hoja.append([row["nombre"], row["asignaciones"], row["transporte_externo"], row["transporte_interno"], row["hospedaje"], row["viaticos"], row["usd"], row["real_transporte_externo"], row["real_transporte_interno"], row["real_hospedaje"], row["real_viaticos"], row["real_gastos_extra"], row["real_usd"], row["variacion_usd"], row["real_ves"], row["sin_tasa_real"]])
     hoja.freeze_panes = "A5"
-    hoja.auto_filter.ref = f"A4:K{max(4, hoja.max_row)}"
-    for columna, ancho in {"A": 38, "B": 15, "C": 24, "D": 24, "E": 24, "F": 22, "G": 18, "H": 18, "I": 17, "J": 18, "K": 18}.items():
+    hoja.auto_filter.ref = f"A4:P{max(4, hoja.max_row)}"
+    for columna, ancho in {"A": 38, "B": 15, "C": 22, "D": 22, "E": 22, "F": 20, "G": 20, "H": 18, "I": 18, "J": 18, "K": 18, "L": 18, "M": 19, "N": 17, "O": 18, "P": 18}.items():
         hoja.column_dimensions[columna].width = ancho
     stream = BytesIO()
     libro.save(stream)
@@ -425,8 +476,8 @@ def exportar_pdf():
     contenido = [Paragraph("Informe financiero · ArbiLiga", styles["Title"]), Spacer(1, 8)]
     contenido.append(Paragraph(f"Agrupado por {grupo} · Filtro: {request.args.get('mes') or request.args.get('temporada') or 'Todos'} · Presupuesto y gastos reales base en USD; VES requiere tasa registrada para la fecha del gasto.", styles["Normal"]))
     contenido.append(Spacer(1, 14))
-    filas = [["Referencia", "Juegos", "Externo USD", "Interno USD", "Hospedaje USD", "Viáticos USD", "Presup. USD", "Real USD", "Variación", "Real VES"]]
-    filas.extend([[str(row["nombre"])[:40], row["asignaciones"], f"{row['transporte_externo']:,.2f}", f"{row['transporte_interno']:,.2f}", f"{row['hospedaje']:,.2f}", f"{row['viaticos']:,.2f}", f"{row['usd']:,.2f}", f"{row['real_usd']:,.2f}", f"{row['variacion_usd']:,.2f}" if row["variacion_usd"] is not None else "Sin registro", f"{row['real_ves']:,.2f}" if row["real_ves"] is not None else "Sin tasa"] for row in agrupados])
+    filas = [["Referencia", "Juegos", "Presup. USD", "Real externo", "Real interno", "Real hotel", "Real viáticos", "Extras", "Real total", "Variación", "Real VES"]]
+    filas.extend([[str(row["nombre"])[:32], row["asignaciones"], f"{row['usd']:,.2f}", f"{row['real_transporte_externo']:,.2f}", f"{row['real_transporte_interno']:,.2f}", f"{row['real_hospedaje']:,.2f}", f"{row['real_viaticos']:,.2f}", f"{row['real_gastos_extra']:,.2f}", f"{row['real_usd']:,.2f}", f"{row['variacion_usd']:,.2f}" if row["variacion_usd"] is not None else "Sin registro", f"{row['real_ves']:,.2f}" if row["real_ves"] is not None else "Sin tasa"] for row in agrupados])
     tabla = Table(filas, repeatRows=1, hAlign="LEFT")
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17365D")),
