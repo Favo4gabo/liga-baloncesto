@@ -209,6 +209,7 @@ def _totales(movimientos):
     total_usd = sum((Decimal(str(item["total_usd"])) for item in movimientos), Decimal("0"))
     converted = [item for item in movimientos if item["total_ves"] is not None]
     total_ves = sum((Decimal(str(item["total_ves"])) for item in converted), Decimal("0"))
+    budget_conversion_complete = bool(movimientos) and len(converted) == len(movimientos)
     categorias = {}
     for key, label, _ in CATEGORIAS:
         usd = sum((Decimal(str(item["costos_usd"][key])) for item in movimientos), Decimal("0"))
@@ -222,7 +223,7 @@ def _totales(movimientos):
         categorias[key] = {
             "nombre": label,
             "usd": float(usd),
-            "ves": float(ves.quantize(Decimal("0.01"))),
+            "ves": float(ves.quantize(Decimal("0.01"))) if budget_conversion_complete else None,
             "real_usd": float(real_usd),
             "real_ves": float(real_ves.quantize(Decimal("0.01"))) if not missing_real_rate else None,
             "variacion_usd": float(real_usd - usd) if any(item["real_usd"][key] for item in movimientos) else None,
@@ -236,7 +237,7 @@ def _totales(movimientos):
     tiene_gastos_reales = sum(item["cantidad_gastos_reales"] for item in movimientos) > 0
     return {
         "usd": float(total_usd),
-        "ves": float(total_ves.quantize(Decimal("0.01"))),
+        "ves": float(total_ves.quantize(Decimal("0.01"))) if budget_conversion_complete else None,
         "real_usd": float(total_real_usd),
         "real_ves": float(total_real_ves.quantize(Decimal("0.01"))) if actual_conversiones_completas and tiene_gastos_reales else None,
         "variacion_usd": float(total_real_usd - total_usd) if tiene_gastos_reales else None,
