@@ -22,7 +22,7 @@ Eres un analista de operaciones y logística deportiva encargado de calcular de 
 2. Sumatoria:
    - costo_total = costo_traslado_externo + costo_traslado_interno + costo_estadia.
 3. Estados Permitidos:
-    - Estado de viaje: Asignado, Confirmado, En camino, En ciudad, En estadio, Finalizado.
+    - Estado de viaje: Asignado, Confirmado, En camino, En ciudad, En estadio, Retraso, Finalizado.
    - Estado de pago: Pendiente, Pagado.
 
 ## Formato de Entrega

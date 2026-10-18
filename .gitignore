@@ -37,3 +37,6 @@ Thumbs.db
 uploads/
 tmp/
 *.db
+
+# Arranque local (scripts/dev-local.ps1)
+.run/

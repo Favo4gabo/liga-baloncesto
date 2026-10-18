@@ -1,11 +1,12 @@
 """Modelos SQLAlchemy del sistema de logística de árbitros."""
 
+import json
 from datetime import datetime
 
 from .database import db
 
 
-ESTADOS_VIAJE = ("Asignado", "Confirmado", "En camino", "En ciudad", "En estadio", "Finalizado")
+ESTADOS_VIAJE = ("Asignado", "Confirmado", "En camino", "En ciudad", "En estadio", "Retraso", "Finalizado")
 ESTADOS_PAGO = ("Pendiente", "Pagado")
 ESTADOS_PARTIDO = ("Programado", "En curso", "Finalizado")
 ARBITROS_POR_PARTIDO = 2
@@ -321,3 +322,29 @@ class EventoNotificacion(db.Model):
     estado_envio = db.Column(db.String(30), nullable=False, default="Pendiente")
     fecha_hora = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     asignacion = db.relationship("AsignacionPartido", back_populates="eventos")
+
+
+class HistorialCambio(db.Model):
+    """Registro auditable de cambios realizados sobre entidades del sistema."""
+    __tablename__ = "historial_cambios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entidad = db.Column(db.String(50), nullable=False, index=True)
+    entidad_id = db.Column(db.Integer, nullable=False, index=True)
+    accion = db.Column(db.String(20), nullable=False)
+    antes = db.Column(db.Text)
+    despues = db.Column(db.Text)
+    origen = db.Column(db.String(50), nullable=False, default="web_admin")
+    fecha = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entidad": self.entidad,
+            "entidad_id": self.entidad_id,
+            "accion": self.accion,
+            "antes": json.loads(self.antes) if self.antes else None,
+            "despues": json.loads(self.despues) if self.despues else None,
+            "origen": self.origen,
+            "fecha": self.fecha.isoformat() if self.fecha else None,
+        }

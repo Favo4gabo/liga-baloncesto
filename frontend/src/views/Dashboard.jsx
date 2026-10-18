@@ -23,12 +23,10 @@ export default function Dashboard() {
     return () => { cancelled = true }
   }, [])
 
-  const programados = data.partidos.filter((p) => p.estado_partido === 'Programado')
   const asignaciones = data.partidos.reduce((total, partido) => total + (partido.asignaciones?.length || 0), 0)
   const cards = [
     ['♙', data.arbitros.filter((a) => a.activo).length, 'Árbitros activos', '/arbitros'],
     ['◫', data.partidos.length, 'Partidos registrados', '/partidos'],
-    ['◷', programados.length, 'Partidos programados', '/partidos/programados'],
     ['✓', asignaciones, 'Asignaciones realizadas', '/asignaciones'],
   ]
 

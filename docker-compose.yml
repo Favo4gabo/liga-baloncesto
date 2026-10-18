@@ -36,6 +36,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      VISION_PROVIDER: ${VISION_PROVIDER:-simulado}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash}
+      BOT_WEBHOOK_TOKEN: ${BOT_WEBHOOK_TOKEN:-}
     ports:
       - "5000:5000"
     volumes:

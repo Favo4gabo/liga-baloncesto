@@ -36,12 +36,10 @@ export default function MetricDetail() {
   }, [selectedArbitroId])
 
   const tipo = pathname === '/arbitros' ? 'arbitros'
-    : pathname === '/partidos/programados' ? 'programados'
-      : pathname === '/asignaciones' ? 'asignaciones' : 'partidos'
+    : pathname === '/asignaciones' ? 'asignaciones' : 'partidos'
   const titulos = {
     arbitros: ['Árbitros y gastos mensuales', 'Gasto logístico de cada árbitro según los partidos del mes seleccionado.'],
     partidos: ['Partidos registrados', 'Sedes, fechas y nivel de asignación arbitral de cada partido.'],
-    programados: ['Partidos programados', 'Partidos pendientes o en preparación y árbitros asignados hasta ahora.'],
     asignaciones: ['Asignaciones arbitrales', 'Árbitros convocados, estado de viaje, pago y costo logístico por partido.'],
   }
 
@@ -64,7 +62,6 @@ export default function MetricDetail() {
   }, [arbitros, partidosDelMes])
 
   let filteredGames = partidos
-  if (tipo === 'programados') filteredGames = partidos.filter((partido) => partido.estado_partido === 'Programado')
   if (tipo === 'asignaciones') filteredGames = partidosDelMes
 
   const asignacionesDelMes = filteredGames.flatMap((partido) => (partido.asignaciones || []).map((asignacion) => ({ partido, asignacion })))
@@ -100,7 +97,7 @@ export default function MetricDetail() {
         </tbody></table></div>
       </section>
     ) : (
-      <section className="panel"><header className="panel-header"><h3>{tipo === 'programados' ? 'Partidos programados' : 'Todos los partidos'}</h3><span className="badge-soft">{filteredGames.length} partidos</span></header>
+      <section className="panel"><header className="panel-header"><h3>Todos los partidos</h3><span className="badge-soft">{filteredGames.length} partidos</span></header>
         <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha y hora</th><th>Partido / cancha</th><th>Ciudad / estado</th><th>Árbitros asignados</th><th>Estado</th></tr></thead><tbody>
           {filteredGames.map((partido) => <tr key={partido.id}><td>{dateTime(partido.fecha_hora)}</td><td className="match-name">{partido.estadio_cancha}</td><td>{partido.ciudad_juego?.nombre}, {partido.ciudad_juego?.estado?.nombre}</td><td><span className={`assignment-count ${partido.asignacion_completa ? 'complete' : ''}`}>{partido.arbitros_asignados ?? partido.asignaciones?.length ?? 0}/{partido.arbitros_requeridos ?? 2}</span></td><td><span className="badge-soft">{partido.estado_partido}</span></td></tr>)}
           {!filteredGames.length && <tr><td colSpan="5" className="empty-cell">No hay partidos en esta vista.</td></tr>}

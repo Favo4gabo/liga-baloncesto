@@ -56,7 +56,8 @@ de colegiados a partir de la carga de calendarios en formato Excel.
 
 Copia `.env.example` a `.env` y ajusta las credenciales. Docker Compose lee
 ese fichero para sustituir las variables (`DB_USER`, `DB_PASSWORD`, `DB_NAME`,
-`DB_PORT`, `DATABASE_URL`, `SECRET_KEY`, `VITE_API_URL`).
+`DB_PORT`, `DATABASE_URL`, `SECRET_KEY`, `VITE_API_URL`, `VISION_PROVIDER`,
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL` y `BOT_WEBHOOK_TOKEN`).
 
 ```bash
 cp .env.example .env
@@ -89,6 +90,23 @@ En Linux, macOS, Git Bash o WSL puede usarse el Makefile equivalente:
 make demo
 make help
 ```
+
+### Arranque local sin Docker
+
+Si no tienes Docker, hay un script equivalente que levanta backend y frontend
+directamente sobre tu máquina usando SQLite y el entorno virtual `.venv`:
+
+```powershell
+.\scripts\dev-local.ps1              # arranca todo, carga la demo si falta y abre la app
+.\scripts\dev-local.ps1 status       # estado de los servicios locales
+.\scripts\dev-local.ps1 logs frontend
+.\scripts\dev-local.ps1 stop         # detiene sin borrar datos
+.\scripts\dev-local.ps1 help         # lista completa
+```
+
+Cada servicio corre en segundo plano y escribe sus logs en `.run/`. La base de
+datos local es `backend/dev.db`; si existe un `.env` con el `DATABASE_URL` de
+Docker (host `db`) el script lo ignora y avisa por pantalla.
 
 ## Puesta en marcha
 
@@ -169,6 +187,72 @@ La sección **Calendario** incorpora una vista mensual navegable y una agenda de
 de partidos, árbitros, origen/destino, estado del viaje, hospedaje y una barra
 de avance para los traslados entre ciudades. Los trayectos aparecen cuando los
 árbitros están asignados a un partido.
+
+## Lector de horarios (OCR/visión)
+
+En **Importar archivos** se encuentran, en una sola opción del menú, el libro
+maestro `.xlsx` y la lectura de horarios. En el modo **Leer horario** se pueden
+previsualizar `.xlsx`, `.csv`, `.png`, `.jpg` y `.jpeg`. La ruta
+`POST /api/horarios/escanear` solo procesa y devuelve
+filas con sugerencias de árbitro, cancha y ciudad; no guarda información. La
+tabla debe revisarse y editarse antes de llamar a `POST /api/horarios/confirmar`.
+La confirmación crea el partido si aún no existe para la combinación de fecha y
+cancha, y registra cada asignación usando el mismo cálculo logístico que el
+calendario. Un partido admite como máximo dos árbitros. El lote se confirma como
+una transacción: ante una fila inválida no se registra parcialmente.
+
+Variables del lector en `.env`:
+
+| Variable | Uso |
+| --- | --- |
+| `VISION_PROVIDER=simulado` | Modo local sin llamadas externas; útil para comprobar la interfaz. No interpreta realmente los píxeles de la imagen. |
+| `VISION_PROVIDER=openrouter` | Habilita visión multimodal real. |
+| `OPENROUTER_API_KEY` | API key privada de OpenRouter; solo se usa en el backend. |
+| `OPENROUTER_MODEL` | Modelo multimodal; por defecto `google/gemini-2.5-flash`. |
+
+Para usar OpenRouter, configura el proveedor y la clave en `.env` y reinicia el
+backend/servicio. El reconocimiento puede equivocarse: las sugerencias son
+orientativas y la aprobación humana es obligatoria.
+
+## Webhook del bot
+
+Configura `BOT_WEBHOOK_TOKEN` como un secreto largo. La API espera la cabecera
+`X-Bot-Token` y un JSON con el teléfono del árbitro y el evento. Puede enviarse
+`asignacion_id` o `partido_id`; si se omiten, se aplica a la próxima asignación
+pendiente del árbitro.
+
+```json
+{
+  "telefono": "+58 414 1234567",
+  "evento": "Retraso",
+  "minutos_retraso": 15,
+  "partido_id": 12
+}
+```
+
+Eventos aceptados: `En camino`, `En cancha` y `Retraso`; `En cancha` se almacena
+como `En estadio`. Cada cambio se registra en `GET /api/historial` con origen
+`bot_whatsapp`, estado anterior/nuevo y minutos de retraso.
+
+Prueba local en PowerShell (el backend debe estar levantado y el token debe
+coincidir con `.env`):
+
+```powershell
+$token = "tu-secreto-configurado"
+$payload = @{ telefono = "+58 414 1234567"; evento = "Retraso"; minutos_retraso = 15; partido_id = 12 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:5000/api/bot/webhook" `
+  -Headers @{ "X-Bot-Token" = $token } -ContentType "application/json" -Body $payload
+Invoke-RestMethod "http://localhost:5000/api/historial?entidad=asignacion&origen=bot_whatsapp"
+```
+
+Endpoints nuevos:
+
+| Método | Ruta | Función |
+| --- | --- | --- |
+| `POST` | `/api/horarios/escanear` | Previsualización solo lectura del horario. Multipart: campo `file`. |
+| `POST` | `/api/horarios/confirmar` | Inserta las filas revisadas por una persona. JSON: `{ "filas": [...] }`. |
+| `POST` | `/api/bot/webhook` | Actualiza el estado arbitral; requiere `X-Bot-Token`. |
+| `GET` | `/api/historial` | Consulta bitácora con filtros y paginación. |
 
 ## Notas de desarrollo
 
