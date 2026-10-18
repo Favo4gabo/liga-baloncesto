@@ -14,7 +14,7 @@ from flask import Flask, g, jsonify, render_template, request, session
 from flask_cors import CORS
 from flask_migrate import Migrate
 
-from .database import db, init_db
+from .database import db, init_db, upgrade_legacy_finance_schema
 from .models import Usuario
 from .routes import register_blueprints
 from .routes.auth import password_error
@@ -53,6 +53,7 @@ def create_app(config: dict | None = None) -> Flask:
     # de desarrollo con el esquema declarado en SQLAlchemy.
     with app.app_context():
         db.create_all()
+    upgrade_legacy_finance_schema(app)
 
     @app.before_request
     def require_authenticated_session():
