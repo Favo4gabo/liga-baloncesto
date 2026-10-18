@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { API_URL } from '../App.jsx'
+import { getCachedLeagueData, loadLeagueData } from '../services/leagueData.js'
 
 const empty = { arbitros: [], partidos: [] }
 const dateText = (value) => value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'
@@ -12,15 +12,15 @@ function AnimatedNumber({ value }) {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState(empty)
+  const [data, setData] = useState(() => getCachedLeagueData() || empty)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all([fetch(`${API_URL}/arbitros/`), fetch(`${API_URL}/partidos`)])
-      .then(async ([arbitros, partidos]) => {
-        if (!arbitros.ok || !partidos.ok) throw new Error('No fue posible consultar la información del sistema.')
-        setData({ arbitros: await arbitros.json(), partidos: await partidos.json() })
-      }).catch((err) => setError(err.message))
+    let cancelled = false
+    loadLeagueData({ refresh: Boolean(getCachedLeagueData()) })
+      .then((latest) => { if (!cancelled) setData(latest) })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+    return () => { cancelled = true }
   }, [])
 
   const programados = data.partidos.filter((p) => p.estado_partido === 'Programado')

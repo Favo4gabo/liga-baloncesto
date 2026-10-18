@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { API_URL } from '../App.jsx'
+import { getCachedLeagueData, loadLeagueData } from '../services/leagueData.js'
 
 const currentMonth = () => {
   const today = new Date()
@@ -11,24 +11,29 @@ const dateTime = (value) => value ? new Intl.DateTimeFormat('es-VE', { dateStyle
 
 export default function MetricDetail() {
   const { pathname } = useLocation()
-  const [arbitros, setArbitros] = useState([])
-  const [partidos, setPartidos] = useState([])
+  const cachedData = getCachedLeagueData()
+  const [arbitros, setArbitros] = useState(() => cachedData?.arbitros || [])
+  const [partidos, setPartidos] = useState(() => cachedData?.partidos || [])
   const [mes, setMes] = useState(currentMonth)
-  const [cargando, setCargando] = useState(true)
+  const [cargando, setCargando] = useState(!cachedData)
   const [error, setError] = useState('')
+  const [selectedArbitroId, setSelectedArbitroId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetch(`${API_URL}/arbitros/`), fetch(`${API_URL}/partidos`)])
-      .then(async ([refereesResponse, gamesResponse]) => {
-        if (!refereesResponse.ok || !gamesResponse.ok) throw new Error('No se pudieron cargar los datos del sistema.')
-        const [referees, games] = await Promise.all([refereesResponse.json(), gamesResponse.json()])
-        if (!cancelled) { setArbitros(referees); setPartidos(games) }
-      })
+    loadLeagueData({ refresh: Boolean(getCachedLeagueData()) })
+      .then((data) => { if (!cancelled) { setArbitros(data.arbitros); setPartidos(data.partidos) } })
       .catch((err) => { if (!cancelled) setError(err.message) })
       .finally(() => { if (!cancelled) setCargando(false) })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!selectedArbitroId) return undefined
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setSelectedArbitroId(null) }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [selectedArbitroId])
 
   const tipo = pathname === '/arbitros' ? 'arbitros'
     : pathname === '/partidos/programados' ? 'programados'
@@ -64,6 +69,11 @@ export default function MetricDetail() {
 
   const asignacionesDelMes = filteredGames.flatMap((partido) => (partido.asignaciones || []).map((asignacion) => ({ partido, asignacion })))
   const showMonth = tipo === 'arbitros' || tipo === 'asignaciones'
+  const selectedArbitro = arbitros.find((arbitro) => arbitro.id === selectedArbitroId)
+  const juegosDelArbitro = selectedArbitro ? partidosDelMes.flatMap((partido) => (partido.asignaciones || [])
+    .filter((asignacion) => asignacion.arbitro_id === selectedArbitro.id)
+    .map((asignacion) => ({ partido, asignacion }))) : []
+  const gastoArbitroSeleccionado = juegosDelArbitro.reduce((total, item) => total + Number(item.asignacion.costo_total || 0), 0)
 
   return <>
     <div className="page-heading detail-page-heading">
@@ -77,7 +87,7 @@ export default function MetricDetail() {
         <div className="table-responsive"><table className="table data-table cost-table"><thead><tr><th>Árbitro</th><th>Ciudad / estado de origen</th><th>Juegos</th><th>Transporte externo</th><th>Transporte interno</th><th>Estadía</th><th>Viáticos</th><th>Total del mes</th></tr></thead>
           <tbody>{arbitros.map((arbitro) => {
             const totals = totalesPorArbitro.get(arbitro.id)
-            return <tr key={arbitro.id}><td className="match-name">{arbitro.nombre} {arbitro.apellido}</td><td>{arbitro.ciudad_origen?.nombre || '—'}{arbitro.ciudad_origen?.estado?.nombre ? `, ${arbitro.ciudad_origen.estado.nombre}` : ''}</td><td>{totals.juegos}</td><td>{money(totals.externo)}</td><td>{money(totals.interno)}</td><td>{money(totals.estadia)}</td><td>{money(totals.viaticos)}</td><td className="monthly-total">{money(totals.total)}</td></tr>
+            return <tr key={arbitro.id}><td><button className="referee-name-button" type="button" onClick={() => setSelectedArbitroId(arbitro.id)}>{arbitro.nombre} {arbitro.apellido}<small>Ver sus partidos</small></button></td><td>{arbitro.ciudad_origen?.nombre || '—'}{arbitro.ciudad_origen?.estado?.nombre ? `, ${arbitro.ciudad_origen.estado.nombre}` : ''}</td><td>{totals.juegos}</td><td>{money(totals.externo)}</td><td>{money(totals.interno)}</td><td>{money(totals.estadia)}</td><td>{money(totals.viaticos)}</td><td className="monthly-total">{money(totals.total)}</td></tr>
           })}{!arbitros.length && <tr><td colSpan="8" className="empty-cell">No hay árbitros registrados.</td></tr>}</tbody>
         </table></div>
         <p className="table-footnote">El gasto se agrupa por mes de la fecha del partido e incluye solo asignaciones registradas. Importes en la moneda de las tarifas cargadas.</p>
@@ -98,5 +108,15 @@ export default function MetricDetail() {
         <p className="table-footnote">Cada partido requiere dos árbitros. Un árbitro puede participar en más de un partido el mismo día o durante la semana.</p>
       </section>
     )}
+    {selectedArbitro && <div className="referee-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedArbitroId(null) }}>
+      <section className="referee-modal panel" role="dialog" aria-modal="true" aria-labelledby="referee-modal-title">
+        <header className="panel-header referee-modal-header"><div><span className="eyebrow">AGENDA Y GASTOS · {mes}</span><h3 id="referee-modal-title">{selectedArbitro.nombre} {selectedArbitro.apellido}</h3></div><button className="icon-button" type="button" onClick={() => setSelectedArbitroId(null)} aria-label="Cerrar detalle">×</button></header>
+        <div className="referee-modal-summary"><span>Origen <strong>{selectedArbitro.ciudad_origen?.nombre || '—'}{selectedArbitro.ciudad_origen?.estado?.nombre ? `, ${selectedArbitro.ciudad_origen.estado.nombre}` : ''}</strong></span><span>Partidos del mes <strong>{juegosDelArbitro.length}</strong></span><span className="monthly-total">Gasto total <strong>{money(gastoArbitroSeleccionado)}</strong></span></div>
+        <div className="table-responsive"><table className="table data-table"><thead><tr><th>Fecha y hora</th><th>Estadio</th><th>Sede</th><th>Gasto total del juego</th></tr></thead><tbody>
+          {juegosDelArbitro.map(({ partido, asignacion }) => <tr key={asignacion.id}><td>{dateTime(partido.fecha_hora)}</td><td className="match-name">{partido.estadio_cancha}</td><td>{partido.ciudad_juego?.nombre}, {partido.ciudad_juego?.estado?.nombre}</td><td className="monthly-total">{money(asignacion.costo_total)}</td></tr>)}
+          {!juegosDelArbitro.length && <tr><td colSpan="4" className="empty-cell">Este árbitro no tiene juegos asignados en {mes}.</td></tr>}
+        </tbody><tfoot><tr><th colSpan="3">Total de gastos del mes</th><th className="monthly-total">{money(gastoArbitroSeleccionado)}</th></tr></tfoot></table></div>
+      </section>
+    </div>}
   </>
 }

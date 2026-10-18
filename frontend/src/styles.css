@@ -199,3 +199,59 @@ body { margin: 0; min-width: 320px; background: #f4f7fb; }
   .calendar-card { padding: 8px; }
   .calendar-card .fc .fc-daygrid-day-frame { min-height: 70px; }
 }
+
+/* FullCalendar v7 (tema Classic) utiliza estas variables de paleta y clases hasheadas. */
+:root[data-theme='dark'] {
+  --fc-classic-background: #1a2736;
+  --fc-classic-faint: #ffffff0a;
+  --fc-classic-muted: #ffffff14;
+  --fc-classic-strong: #ffffff24;
+  --fc-classic-foreground: #e4edf5;
+  --fc-classic-faint-foreground: #8797a9;
+  --fc-classic-muted-foreground: #a0afbf;
+  --fc-classic-border: #344559;
+  --fc-classic-strong-border: #52657b;
+  --fc-classic-button: #25384c;
+  --fc-classic-button-border: #52657b;
+  --fc-classic-button-strong: #326777;
+  --fc-classic-button-strong-border: #438b92;
+  --fc-classic-button-foreground: #f2f7fb;
+  --fc-classic-highlight: #39758a44;
+  --fc-classic-today: #41a89a2c;
+}
+:root[data-theme='dark'] .calendar-card { background: var(--surface); background-image: none; border-color: var(--border); }
+:root[data-theme='dark'] .calendar-card .fc,
+:root[data-theme='dark'] .calendar-card [class*='fc-classic-'] { color: var(--text); }
+:root[data-theme='dark'] .calendar-card .fc-classic-AVD.fc-classic-DIS { color: #ecf4fb !important; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.25; letter-spacing: .01em; }
+:root[data-theme='dark'] .calendar-card .fc .fc-toolbar-title { color: #ecf4fb !important; }
+:root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-'] { border-color: var(--fc-classic-border); }
+:root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-']:is(th, td) { background-color: var(--fc-classic-background); }
+:root[data-theme='dark'] .calendar-card .fc [class*='fc-classic-AVD'] { text-shadow: none; }
+:root[data-theme='dark'] .day-panel-header { color: #e4edf5 !important; border-color: var(--border) !important; background: #1a2736 !important; }
+:root[data-theme='dark'] .day-panel-header .eyebrow { color: #a0afbf; }
+:root[data-theme='dark'] .day-panel-header h3 { color: #ecf4fb !important; }
+
+/* Detalle modal de los partidos mensuales de cada árbitro. */
+.referee-name-button { display: inline-grid; gap: 3px; border: 0; padding: 0; color: #246c91; background: transparent; font: inherit; font-weight: 750; text-align: left; }
+.referee-name-button:hover { color: #174d6c; text-decoration: underline; }
+.referee-name-button small { color: var(--muted); font-size: 10px; font-weight: 550; }
+.referee-modal-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; overflow-y: auto; padding: 24px; background: rgb(13 25 39 / 62%); backdrop-filter: blur(4px); }
+.referee-modal { width: min(920px, 100%); max-height: min(82vh, 760px); overflow: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 24px 70px rgb(0 0 0 / 28%); }
+.referee-modal-header { position: sticky; top: 0; z-index: 1; align-items: center; border-bottom: 1px solid var(--border); background: var(--surface, #fff); }
+.referee-modal-header h3 { margin: 5px 0 0; color: var(--text); font-size: 18px; font-weight: 750; }
+.referee-modal-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding: 14px 20px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.referee-modal-summary span { display: grid; gap: 3px; }
+.referee-modal-summary strong { color: var(--text); }
+.referee-modal-summary .monthly-total { margin-left: auto; color: #16796e !important; font-size: 13px; font-weight: 800; }
+.referee-modal-summary .monthly-total strong { color: inherit; font-size: 16px; }
+.referee-modal .table-responsive { padding: 0 10px 8px; }
+.referee-modal tfoot th { padding: 14px 20px; border-top: 1px solid var(--border); color: var(--text); background: var(--surface-subtle, #f7fafc); }
+:root[data-theme='dark'] .referee-name-button { color: #8ccfe3; }
+:root[data-theme='dark'] .referee-name-button:hover { color: #c0eaf4; }
+:root[data-theme='dark'] .referee-modal-summary .monthly-total { color: #83d7c8 !important; }
+:root[data-theme='dark'] .referee-modal tfoot th { color: var(--text); background: var(--surface-subtle); }
+@media (max-width: 600px) {
+  .referee-modal-backdrop { align-items: end; padding: 0; }
+  .referee-modal { width: 100%; max-height: 90vh; border-radius: 16px 16px 0 0; }
+  .referee-modal-summary .monthly-total { margin-left: 0; }
+}

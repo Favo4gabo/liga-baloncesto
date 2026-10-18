@@ -21,6 +21,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    document.documentElement.dataset.colorScheme = theme
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101a27' : '#16325c')
     try { window.localStorage.setItem('arbiliga-theme', theme) } catch { /* El tema sigue activo aunque el navegador bloquee storage. */ }
   }, [theme])

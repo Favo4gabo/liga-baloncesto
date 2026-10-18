@@ -7,28 +7,29 @@ import esLocale from '@fullcalendar/react/locales/es'
 import '@fullcalendar/react/skeleton.css'
 import '@fullcalendar/react/themes/classic/theme.css'
 import '@fullcalendar/react/themes/classic/palette.css'
-import { API_URL } from '../App.jsx'
 import PanelDia from '../components/PanelDia.jsx'
+import { getCachedLeagueData, loadLeagueData } from '../services/leagueData.js'
 
 const dateKey = (value) => value?.slice(0, 10)
 
 export default function Calendario() {
-  const [partidos, setPartidos] = useState([])
-  const [arbitros, setArbitros] = useState([])
+  const cachedData = getCachedLeagueData()
+  const [partidos, setPartidos] = useState(() => cachedData?.partidos || [])
+  const [arbitros, setArbitros] = useState(() => cachedData?.arbitros || [])
   const [fecha, setFecha] = useState('')
-  const [cargando, setCargando] = useState(true)
+  const [cargando, setCargando] = useState(!cachedData)
   const [error, setError] = useState('')
 
-  const cargarCalendario = () => Promise.all([fetch(`${API_URL}/partidos`), fetch(`${API_URL}/arbitros/`)]).then(async ([respuestaPartidos, respuestaArbitros]) => {
-    if (!respuestaPartidos.ok || !respuestaArbitros.ok) throw new Error('No se pudo cargar el calendario.')
-    setPartidos(await respuestaPartidos.json())
-    setArbitros(await respuestaArbitros.json())
-  })
+  const aplicarDatos = (datos) => { setPartidos(datos.partidos); setArbitros(datos.arbitros) }
+  const cargarCalendario = () => loadLeagueData({ refresh: true }).then(aplicarDatos)
 
   useEffect(() => {
-    cargarCalendario()
+    let cancelled = false
+    loadLeagueData({ refresh: Boolean(getCachedLeagueData()) })
+      .then((datos) => { if (!cancelled) aplicarDatos(datos) })
       .catch(() => setError('No se pudo cargar el calendario. Verifica que el backend esté activo.'))
-      .finally(() => setCargando(false))
+      .finally(() => { if (!cancelled) setCargando(false) })
+    return () => { cancelled = true }
   }, [])
 
   const partidosDia = useMemo(() => partidos.filter((partido) => dateKey(partido.fecha_hora) === fecha), [partidos, fecha])
@@ -47,7 +48,8 @@ export default function Calendario() {
     <div className="page-heading calendar-heading">
       <div><h2>Calendario de partidos</h2><p>Selecciona un día para consultar sus sedes, árbitros y costos.</p></div>
     </div>
-    {error ? <div className="error-notice">{error}</div> : cargando ? <div className="loading">Cargando calendario…</div> : (
+    {error && <div className="error-notice">{error}</div>}
+    {cargando ? <div className="loading">Cargando calendario…</div> : (
       <div className="calendar-layout">
         <section className="calendar-card panel">
           <FullCalendar
