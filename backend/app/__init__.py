@@ -134,6 +134,43 @@ def create_app(config: dict | None = None) -> Flask:
         initialize_database(app)
         click.echo("Esquema de base de datos listo.")
 
+    @app.cli.command("bootstrap-superadmin")
+    def bootstrap_superadmin():
+        """Crea el primer propietario desde variables de entorno; no actúa si ya existe uno."""
+        if Usuario.query.filter_by(rol="super_admin").first() is not None:
+            click.echo("Ya existe un super_admin; se omite la creación inicial.")
+            return
+
+        email = os.getenv("SUPERADMIN_EMAIL", "").strip().lower()
+        name = os.getenv("SUPERADMIN_NAME", "").strip()
+        password = os.getenv("SUPERADMIN_PASSWORD", "")
+        if not email or not name or not password:
+            click.echo("Bootstrap sin configurar: faltan variables; no se creó ninguna cuenta.")
+            return
+
+        if Usuario.query.filter_by(email=email).first() is not None:
+            click.echo("El correo inicial ya está ocupado; no se creó ninguna cuenta.")
+            return
+        if Usuario.query.filter_by(rol="super_admin").count() >= 2:
+            click.echo("Ya existe el máximo permitido de super_admin; se omite la creación.")
+            return
+
+        error = password_error(password)
+        if error:
+            raise click.ClickException(error)
+
+        usuario = Usuario(
+            nombre=name,
+            email=email,
+            rol="super_admin",
+            activo=True,
+            debe_cambiar_password=False,
+        )
+        usuario.establecer_password(password)
+        db.session.add(usuario)
+        db.session.commit()
+        click.echo(f"Cuenta super_admin inicial creada para {email}; la contraseña se guardó como hash.")
+
     return app
 
 

@@ -71,9 +71,17 @@ El archivo `render.yaml` define una demo con API Flask, frontend estático y
 PostgreSQL. No incluye el bot de Telegram para mantener esta primera prueba más
 sencilla. Desde Render, crea un **Blueprint** conectado a este repo y a la rama
 `main`, selecciona `render.yaml` y revisa los precios antes de confirmar. El
-frontend es gratuito; el API usa el plan mínimo con Shell para crear las cuentas.
-La base gratuita es temporal: Render la elimina después de 30 días (con un plazo
-adicional para actualizarla); úsala solo para probar, no para datos oficiales.
+frontend, API y base de datos usan el plan `free`. El API se suspende tras 15
+minutos sin tráfico y puede tardar alrededor de un minuto en volver. La base
+gratuita expira a los 30 días; Render da 14 días adicionales para actualizarla,
+tras lo cual elimina sus datos. Úsala solo para probar, nunca para datos oficiales.
+
+Al crear el Blueprint, Render pedirá `SUPERADMIN_EMAIL`, `SUPERADMIN_NAME` y
+`SUPERADMIN_PASSWORD` para la primera cuenta propietaria. La contraseña debe
+tener al menos 6 caracteres; el backend guarda solo su hash. El comando de
+arranque crea la cuenta una sola vez y se omite en reinicios cuando ya existe un
+`super_admin`. Después del primer inicio de sesión, elimina esas tres variables
+de la configuración del servicio en Render, especialmente `SUPERADMIN_PASSWORD`.
 
 Esta demo no necesita claves de OpenRouter, Gemini, SMTP ni Telegram. El lector
 de imágenes queda en modo simulado. Las credenciales que aparecieron en versiones
@@ -89,11 +97,10 @@ Para uso estable, conecta dominios propios bajo el mismo dominio registrable
 `FRONTEND_ORIGINS` y `VITE_API_URL`, y vuelve a desplegar ambos servicios.
 
 La PostgreSQL de Render empieza vacía: el volumen MariaDB/Docker local no se
-copia automáticamente ni se modifica. Para entrar en esta demo, abre **Shell**
-del servicio API y ejecuta `flask create-superadmin` (dos veces si quieres las
-dos cuentas propietarias). `flask init-db` se ejecuta al arrancar el servicio.
-Después puedes importar datos de prueba desde la interfaz. No uses esta base
-temporal como sistema oficial ni pongas en ella datos que deban conservarse.
+copia automáticamente ni se modifica. `flask init-db` y la creación de la cuenta
+inicial se ejecutan al arrancar el API. Después inicia sesión e importa datos de
+prueba desde la interfaz. No uses esta base temporal para información que debas
+conservar.
 
 ## Arranque rápido en Windows
 

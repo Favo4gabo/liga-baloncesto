@@ -3,12 +3,11 @@ services:
   - type: web
     name: arbiliga-api
     runtime: python
-    # Plan mínimo con Shell para poder crear las cuentas de prueba.
-    plan: 0.5c-512mb
+    plan: free
     region: oregon
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: flask --app app init-db && gunicorn -w 2 -k gthread --threads 4 --timeout 120 -b 0.0.0.0:$PORT app:app
+    startCommand: flask --app app init-db && flask --app app bootstrap-superadmin && gunicorn -w 2 -k gthread --threads 4 --timeout 120 -b 0.0.0.0:$PORT app:app
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -37,6 +36,12 @@ services:
         value: gemini-2.5-flash
       - key: BCV_URL
         value: https://www.bcv.org.ve/
+      - key: SUPERADMIN_EMAIL
+        sync: false
+      - key: SUPERADMIN_NAME
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
 
   - type: web
     name: arbiliga-frontend
