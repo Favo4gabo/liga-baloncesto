@@ -67,20 +67,19 @@ cp .env.example .env
 
 ## Despliegue en Render
 
-El archivo `render.yaml` define el API Flask, el frontend estático, el worker de
-Telegram y PostgreSQL. Desde Render, crea un **Blueprint** conectado a este repo
-y a la rama `main`, selecciona `render.yaml` y revisa los planes y precios antes
-de confirmar. La base de datos y el worker son servicios de pago; el API usa el
-plan gratuito y puede tardar en despertar tras un periodo sin tráfico.
+El archivo `render.yaml` define una demo con API Flask, frontend estático y
+PostgreSQL. No incluye el bot de Telegram para mantener esta primera prueba más
+sencilla. Desde Render, crea un **Blueprint** conectado a este repo y a la rama
+`main`, selecciona `render.yaml` y revisa los precios antes de confirmar. El
+frontend es gratuito; el API usa el plan mínimo con Shell para crear las cuentas.
+La base gratuita es temporal: Render la elimina después de 30 días (con un plazo
+adicional para actualizarla); úsala solo para probar, no para datos oficiales.
 
-Al crear el Blueprint, Render pedirá valores para `BOT_WEBHOOK_TOKEN`,
-`TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS`. Usa un token recién generado por
-@BotFather. Configura además las claves `OPENROUTER_API_KEY` o `GEMINI_API_KEY`
-solo si habilitas visión real, y las variables `SMTP_*` si vas a enviar correos.
-Los secretos deben guardarse en el Dashboard de Render, nunca en Git ni en
-`.env.example`. Las credenciales de OpenRouter, Gemini y Telegram que aparecieron
-en versiones antiguas del repositorio deben revocarse y regenerarse antes de
-desplegar; limpiar el archivo actual no las elimina del historial de Git.
+Esta demo no necesita claves de OpenRouter, Gemini, SMTP ni Telegram. El lector
+de imágenes queda en modo simulado. Las credenciales que aparecieron en versiones
+antiguas del repositorio deben revocarse y regenerarse antes de habilitar esos
+servicios; limpiar el archivo actual no las elimina del historial de Git. Guarda
+cualquier secreto solo en el Dashboard de Render, nunca en Git ni en `.env.example`.
 
 El backend y el frontend quedan inicialmente en subdominios `onrender.com`
 distintos; por eso la Blueprint configura cookies `Secure` y `SameSite=None`.
@@ -90,11 +89,11 @@ Para uso estable, conecta dominios propios bajo el mismo dominio registrable
 `FRONTEND_ORIGINS` y `VITE_API_URL`, y vuelve a desplegar ambos servicios.
 
 La PostgreSQL de Render empieza vacía: el volumen MariaDB/Docker local no se
-copia automáticamente. Conserva intacta la base local y prepara una migración
-de datos antes de usar el sitio como sistema oficial. No cargues gastos o
-usuarios de producción manualmente en una base de pruebas. Cuando la base esté
-lista, `flask init-db` crea las tablas de forma idempotente y crea los dos
-`super_admin` desde la Shell del servicio API con `flask create-superadmin`.
+copia automáticamente ni se modifica. Para entrar en esta demo, abre **Shell**
+del servicio API y ejecuta `flask create-superadmin` (dos veces si quieres las
+dos cuentas propietarias). `flask init-db` se ejecuta al arrancar el servicio.
+Después puedes importar datos de prueba desde la interfaz. No uses esta base
+temporal como sistema oficial ni pongas en ella datos que deban conservarse.
 
 ## Arranque rápido en Windows
 
