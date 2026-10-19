@@ -37,7 +37,7 @@ function LoginScreen() {
 
   return <main className="auth-screen">
     <form className="auth-card panel" onSubmit={submit}>
-      <div className="auth-brand"><img className="auth-brand-logo" src="/images/logo/logo.png" alt="" /><strong>Arbi<span>Liga</span></strong></div>
+      <div className="auth-brand"><img className="auth-brand-logo" src="/images/logo/logo.png?v=2" alt="" /><strong>Arbi<span>Liga</span></strong></div>
       <h1>Iniciar sesión</h1><p>Ingresa con la cuenta de tu liga.</p>
       {error && <div className="error-notice" role="alert">{error}</div>}
       <label>Correo electrónico<input autoComplete="username" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
@@ -94,7 +94,7 @@ function AppShell({ theme, setTheme, user }) {
 
   return <div className="app-shell" data-theme={theme}>
     <aside className="sidebar">
-      <div className="brand"><img className="brand-logo" src="/images/logo/logo.png" alt="" /><span className="brand-copy"><span className="brand-name">Arbi<span>Liga</span></span><small>GESTIÓN ARBITRAL</small></span></div>
+      <div className="brand"><img className="brand-logo" src="/images/logo/logo.png?v=2" alt="" /><span className="brand-copy"><span className="brand-name">Arbi<span>Liga</span></span><small>GESTIÓN ARBITRAL</small></span></div>
       <p className="sidebar-label">OPERACIÓN</p>
       <nav className="side-nav">{links.map((item) => <NavLink key={item.to} to={item.to}><span>{item.icon}</span>{item.label}</NavLink>)}</nav>
       <div className="sidebar-footer"><div className="admin-avatar">{user.nombre?.[0] || 'U'}</div><div><strong>{user.nombre}</strong><small>{ROLE_NAMES[user.rol] || user.rol}</small></div></div>

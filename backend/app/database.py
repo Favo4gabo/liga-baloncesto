@@ -84,6 +84,9 @@ def initialize_database(app: Flask) -> None:
 
             db.create_all()
             upgrade_legacy_finance_schema(app)
+            from .services.catalogos_iniciales import asegurar_catalogo_geografico
+
+            asegurar_catalogo_geografico()
         finally:
             if lock_acquired and dialect == "postgresql":
                 lock_connection.execute(text("SELECT pg_advisory_unlock(731947201)"))

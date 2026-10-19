@@ -21,12 +21,17 @@ export default function Administracion() {
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    const responses = await Promise.all([
+    const paths = [
       apiFetch('/catalogos/ciudades'),
       apiFetch('/arbitros/'),
       apiFetch('/catalogos/canchas'),
-    ])
-    if (!responses.every((response) => response.ok)) throw new Error('No se pudieron cargar los catálogos y árbitros.')
+    ]
+    const responses = await Promise.all(paths)
+    const failedIndex = responses.findIndex((response) => !response.ok)
+    if (failedIndex >= 0) {
+      const names = ['ciudades y estados', 'árbitros', 'canchas']
+      throw new Error(`No se pudieron cargar ${names[failedIndex]} (HTTP ${responses[failedIndex].status}). Recarga e inicia sesión nuevamente si la sesión expiró.`)
+    }
     const [cities, refs, venues] = await Promise.all(responses.map((response) => response.json()))
     setCiudades(cities)
     setArbitros(refs)
@@ -159,6 +164,7 @@ export default function Administracion() {
     {error && <div className="error-notice" role="alert">{error}</div>}
     {message && <div className="success-notice" role="status">✓ {message}</div>}
     <div className="admin-tabs">{tabs.map(([id, label, count]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label} <span>{count}</span></button>)}</div>
+    {!loading && !ciudades.length && <div className="schedule-warning" role="status">No hay ciudades cargadas. Al iniciar la aplicación se añaden las capitales de referencia; si el problema continúa, revisa el estado del backend y vuelve a cargar la página.</div>}
     {loading ? <div className="loading">Cargando administración…</div> : <div className="admin-layout">
       {tab === 'arbitros' && <>
         <section className="panel admin-form-card">

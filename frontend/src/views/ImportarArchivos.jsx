@@ -31,7 +31,7 @@ export default function ImportarArchivos() {
   }
 
   function fallbackToSchedule(reason) {
-    setMessage(`No se reconoció el formato fijo del libro maestro. ${reason} Se analizará el contenido del archivo para encontrar los datos del horario.`)
+    setMessage(`No se reconoció el libro maestro. ${reason} Se analizará como un horario individual; este modo no crea árbitros ni tarifas. Registra árbitros y canchas en Administración y carga primero el libro maestro con sus tarifas si aún no existen.`)
     setMode('schedule')
   }
 
@@ -42,7 +42,7 @@ export default function ImportarArchivos() {
 
   return <>
     <div className="page-heading">
-      <div><h2>Importar archivo</h2><p>Sube un archivo; el sistema analiza su contenido y te permite revisar los datos antes de guardarlos.</p></div>
+      <div><h2>Importar archivo</h2><p>El libro maestro carga catálogos, árbitros y tarifas; un archivo de horario individual propone partidos y asignaciones para revisar.</p></div>
     </div>
 
     {message && <div className="schedule-warning" role="status">{message}</div>}

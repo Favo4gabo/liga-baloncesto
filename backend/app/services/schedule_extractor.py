@@ -196,6 +196,14 @@ def _mejor_coincidencia(texto: str, opciones, etiqueta) -> tuple[int | None, flo
     consulta = _clave(texto)
     if not consulta:
         return None, 0.0
+
+    # Algunos libros ya contienen los IDs internos en vez de los nombres.
+    # Excel suele cargarlos como número entero o decimal terminado en .0.
+    if re.fullmatch(r"[1-9]\d*(?:\.0+)?", str(texto).strip()):
+        id_directo = int(float(texto))
+        if any(opcion.id == id_directo for opcion in opciones):
+            return id_directo, 1.0
+
     mejor_id, mejor_score = None, 0.0
     for opcion in opciones:
         candidato = _clave(etiqueta(opcion))
