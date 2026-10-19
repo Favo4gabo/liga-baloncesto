@@ -14,7 +14,7 @@ from flask import Flask, g, jsonify, render_template, request, session
 from flask_cors import CORS
 from flask_migrate import Migrate
 
-from .database import db, init_db, upgrade_legacy_finance_schema
+from .database import db, init_db, initialize_database
 from .models import Usuario
 from .routes import register_blueprints
 from .routes.auth import password_error
@@ -29,15 +29,22 @@ def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     ruta_db_local = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dev.db"))
 
+    database_url = os.getenv("DATABASE_URL", f"sqlite:///{ruta_db_local}")
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     app.config.update(
         SECRET_KEY=os.getenv("SECRET_KEY", "dev-secret-change-me"),
-        SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", f"sqlite:///{ruta_db_local}"),
+        SQLALCHEMY_DATABASE_URI=database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB para subidas Excel
         SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SAMESITE=os.getenv("COOKIE_SAMESITE", "Lax"),
         SESSION_COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+        AUTO_CREATE_DB=os.getenv("AUTO_CREATE_DB", "true").lower() == "true",
     )
 
     if config:
@@ -49,11 +56,10 @@ def create_app(config: dict | None = None) -> Flask:
     init_db(app)
     Migrate(app, db)  # habilita `flask db init/migrate/upgrade`
     register_blueprints(app)
-    # Mientras se genera la primera migración de Alembic, permite iniciar el entorno
-    # de desarrollo con el esquema declarado en SQLAlchemy.
-    with app.app_context():
-        db.create_all()
-    upgrade_legacy_finance_schema(app)
+    # En local se conserva la inicialización automática. Render la ejecuta mediante
+    # `flask init-db` antes de arrancar Gunicorn/el worker para evitar carreras DDL.
+    if app.config["AUTO_CREATE_DB"]:
+        initialize_database(app)
 
     @app.before_request
     def require_authenticated_session():
@@ -121,6 +127,12 @@ def create_app(config: dict | None = None) -> Flask:
         usuario.debe_cambiar_password = False
         db.session.commit()
         click.echo("Contraseña restablecida; no puede recuperarse en texto plano.")
+
+    @app.cli.command("init-db")
+    def init_database():
+        """Crea tablas faltantes y aplica la actualización compatible del esquema financiero."""
+        initialize_database(app)
+        click.echo("Esquema de base de datos listo.")
 
     return app
 

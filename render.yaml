@@ -1,0 +1,99 @@
+# Blueprint para Render. Revisa los planes/costos en el Dashboard antes de aplicar.
+services:
+  - type: web
+    name: arbiliga-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: flask --app app init-db && gunicorn -w 2 -k gthread --threads 4 --timeout 120 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FLASK_ENV
+        value: production
+      - key: AUTO_CREATE_DB
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: arbiliga-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "None"
+      - key: FRONTEND_ORIGINS
+        value: https://arbiliga-frontend.onrender.com
+      - key: VISION_PROVIDER
+        value: simulado
+      - key: OPENROUTER_MODEL
+        value: google/gemini-2.5-flash
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: BCV_URL
+        value: https://www.bcv.org.ve/
+      - key: BOT_WEBHOOK_TOKEN
+        sync: false
+
+  - type: web
+    name: arbiliga-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://arbiliga-api.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
+  - type: worker
+    name: arbiliga-telegram-bot
+    runtime: python
+    plan: 0.5c-512mb
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: flask --app app init-db && python -m app.telegram_bot
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: AUTO_CREATE_DB
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: arbiliga-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: arbiliga-api
+          type: web
+          envVarKey: SECRET_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ADMIN_IDS
+        sync: false
+
+databases:
+  - name: arbiliga-postgres
+    databaseName: arbiliga
+    user: arbiliga
+    region: oregon
+    plan: 0.1c-256mb
+    ipAllowList: []

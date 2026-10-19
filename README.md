@@ -65,6 +65,37 @@ ese fichero para sustituir las variables (`DB_USER`, `DB_PASSWORD`, `DB_NAME`,
 cp .env.example .env
 ```
 
+## Despliegue en Render
+
+El archivo `render.yaml` define el API Flask, el frontend estático, el worker de
+Telegram y PostgreSQL. Desde Render, crea un **Blueprint** conectado a este repo
+y a la rama `main`, selecciona `render.yaml` y revisa los planes y precios antes
+de confirmar. La base de datos y el worker son servicios de pago; el API usa el
+plan gratuito y puede tardar en despertar tras un periodo sin tráfico.
+
+Al crear el Blueprint, Render pedirá valores para `BOT_WEBHOOK_TOKEN`,
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_ADMIN_IDS`. Usa un token recién generado por
+@BotFather. Configura además las claves `OPENROUTER_API_KEY` o `GEMINI_API_KEY`
+solo si habilitas visión real, y las variables `SMTP_*` si vas a enviar correos.
+Los secretos deben guardarse en el Dashboard de Render, nunca en Git ni en
+`.env.example`. Las credenciales de OpenRouter, Gemini y Telegram que aparecieron
+en versiones antiguas del repositorio deben revocarse y regenerarse antes de
+desplegar; limpiar el archivo actual no las elimina del historial de Git.
+
+El backend y el frontend quedan inicialmente en subdominios `onrender.com`
+distintos; por eso la Blueprint configura cookies `Secure` y `SameSite=None`.
+Algunos navegadores bloquean cookies de terceros incluso con esa configuración.
+Para uso estable, conecta dominios propios bajo el mismo dominio registrable
+(por ejemplo `app.tudominio.com` y `api.tudominio.com`), actualiza
+`FRONTEND_ORIGINS` y `VITE_API_URL`, y vuelve a desplegar ambos servicios.
+
+La PostgreSQL de Render empieza vacía: el volumen MariaDB/Docker local no se
+copia automáticamente. Conserva intacta la base local y prepara una migración
+de datos antes de usar el sitio como sistema oficial. No cargues gastos o
+usuarios de producción manualmente en una base de pruebas. Cuando la base esté
+lista, `flask init-db` crea las tablas de forma idempotente y crea los dos
+`super_admin` desde la Shell del servicio API con `flask create-superadmin`.
+
 ## Arranque rápido en Windows
 
 Con Docker Desktop abierto, desde PowerShell y en la raíz del proyecto ejecuta:
