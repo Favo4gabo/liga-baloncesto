@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../services/api.js'
+import ProcesandoOverlay from '../components/ProcesandoOverlay.jsx'
 
 const fieldLabels = {
   estados: 'Estados', ciudades: 'Ciudades', tarifas_traslado: 'Tarifas de traslado',
@@ -8,11 +9,12 @@ const fieldLabels = {
   distancias_ciudades: 'Distancias entre ciudades', ubicaciones_cancha: 'Sedes', aeropuertos: 'Aeropuertos',
 }
 
-export default function CargaExcel({ embedded = false, initialFile = null, hideUploader = false, autoAnalyze = false, onValidationError, onValidationComplete }) {
+export default function CargaExcel({ embedded = false, initialFile = null, hideUploader = false, autoAnalyze = false, onValidationError, onValidationComplete, onImportComplete }) {
   const ref = useRef(null)
   const autoAnalyzed = useRef(false)
   const [file, setFile] = useState(initialFile)
   const [loading, setLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [preview, setPreview] = useState(null)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -37,7 +39,7 @@ export default function CargaExcel({ embedded = false, initialFile = null, hideU
   async function submit(event) {
     event.preventDefault()
     if (!preview) return analyzeWorkbook()
-    setLoading(true); setError('')
+    setLoading(true); setImporting(true); setError('')
     try {
       const body = new FormData()
       body.append('file', file)
@@ -45,7 +47,8 @@ export default function CargaExcel({ embedded = false, initialFile = null, hideU
       const json = await response.json()
       if (!response.ok) throw new Error(json.error || 'No fue posible importar el libro.')
       setResult(json)
-    } catch (err) { setError(err.message) } finally { setLoading(false) }
+      onImportComplete?.(json)
+    } catch (err) { setError(err.message) } finally { setLoading(false); setImporting(false) }
   }
 
   useEffect(() => {
@@ -59,6 +62,7 @@ export default function CargaExcel({ embedded = false, initialFile = null, hideU
   }
 
   return <>
+    <ProcesandoOverlay visible={loading} title={importing ? 'Guardando información del archivo…' : 'Analizando el archivo…'} detail={importing ? 'Estamos registrando los catálogos, árbitros, tarifas y partidos en una transacción segura.' : 'Estamos leyendo y validando las tablas. Este paso todavía no guarda cambios.'} />
     {!embedded && <div className="page-heading"><div><h2>Importar archivo</h2><p>Analiza, revisa el resumen y confirma antes de guardar.</p></div></div>}
     {error && <div className="error-notice mt-3" role="alert">{error}</div>}
     {!hideUploader && <div className="upload-layout">
@@ -78,7 +82,8 @@ export default function CargaExcel({ embedded = false, initialFile = null, hideU
     </section>}
 
     {preview && <section className="panel master-analysis-preview">
-      <header className="panel-header"><div><h3>Revisión antes de importar</h3><small>La validación terminó correctamente. Aún no se guardó nada.</small></div><span className="badge-soft">Validado</span></header>
+      <header className="panel-header"><div><h3>Revisión antes de importar</h3><small>{preview.origen === 'ia_tablas_apiladas' ? `IA de apoyo: ${preview.proveedor || 'proveedor'} · ${preview.modelo || 'modelo'}. ` : preview.origen === 'tablas_apiladas' ? 'Se detectaron automáticamente tablas organizadas por bloques en el libro. ' : 'La validación terminó correctamente. '}Aún no se guardó nada.</small></div><span className="badge-soft">Validado</span></header>
+      {preview.advertencias?.map((advertencia, indice) => <div className="schedule-warning" role="status" key={`${indice}-${advertencia}`}>{advertencia}</div>)}
       <div className="master-analysis-grid">{Object.entries(preview.insertados_o_actualizados || {}).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{fieldLabels[key] || key.replaceAll('_', ' ')}</span></div>)}</div>
       <p className="table-footnote">Al confirmar, estas hojas se importarán en una única transacción. Si alguna fila es inválida, no se guardará el lote.</p>
       {!hideUploader && <button type="button" className="btn-primary-custom master-confirm" disabled={loading} onClick={() => submit({ preventDefault() {} })}>{loading ? 'Guardando…' : 'Confirmar e importar'}</button>}

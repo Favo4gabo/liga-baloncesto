@@ -124,6 +124,7 @@ def confirmar_horario():
                 "cantidad_dias": fila.get("cantidad_dias", 1),
                 "medio_transporte": fila.get("medio_transporte") or None,
                 "viatico_por_dia": fila.get("viatico_por_dia"),
+                "hospedaje_total": fila.get("hospedaje_total"),
             }
             try:
                 asignacion = crear_asignacion(partido.id, opciones, commit=False)

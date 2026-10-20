@@ -34,7 +34,7 @@ $DirRun      = Join-Path $Raiz '.run'
 # que la petición quedaría esperando hasta agotar el tiempo de espera.
 $Api         = 'http://127.0.0.1:5000/api'
 $UrlFront    = 'http://127.0.0.1:5173'
-$UrlNavegador = 'http://localhost:5173'
+$UrlNavegador = 'http://127.0.0.1:5173'
 $Plantilla   = Join-Path $DirBack 'plantilla_liga.xlsx'
 $PuertoBack  = 5000
 $PuertoFront = 5173
@@ -44,8 +44,8 @@ function Write-Ayuda {
 ArbiLiga - arranque local sin Docker (backend Flask + frontend Vite)
 
   .\scripts\dev-local.ps1                 Arranca servicios y abre la app (requiere cuentas)
-  .\scripts\dev-local.ps1 backend         Arranca solo el backend en http://localhost:5000
-  .\scripts\dev-local.ps1 frontend        Arranca solo el frontend en http://localhost:5173
+  .\scripts\dev-local.ps1 backend         Arranca solo el backend en http://127.0.0.1:5000
+  .\scripts\dev-local.ps1 frontend        Arranca solo el frontend en http://127.0.0.1:5173
   .\scripts\dev-local.ps1 status          Estado de los servicios locales
   .\scripts\dev-local.ps1 logs            Sigue los logs de ambos servicios
   .\scripts\dev-local.ps1 logs frontend   Logs de un servicio (backend o frontend)

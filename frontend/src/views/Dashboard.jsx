@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getCachedLeagueData, loadLeagueData } from '../services/leagueData.js'
 
 const empty = { arbitros: [], partidos: [] }
@@ -14,6 +14,20 @@ function AnimatedNumber({ value }) {
 export default function Dashboard() {
   const [data, setData] = useState(() => getCachedLeagueData() || empty)
   const [error, setError] = useState('')
+  const [importNotification, setImportNotification] = useState('')
+  const notificationProcessed = useRef(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const notification = location.state?.importNotification
+    if (!notification || notificationProcessed.current) return
+    notificationProcessed.current = true
+    setImportNotification(notification)
+    navigate(location.pathname, { replace: true, state: null })
+    const timer = window.setTimeout(() => setImportNotification(''), 7000)
+    return () => window.clearTimeout(timer)
+  }, [location.key, location.pathname, location.state, navigate])
 
   useEffect(() => {
     let cancelled = false
@@ -34,6 +48,7 @@ export default function Dashboard() {
 
   return <>
     <div className="page-heading"><div><h2>Resumen de la liga</h2><p>Consulta rápidamente la actividad y logística arbitral.</p></div></div>
+    {importNotification && <div className="success-notice import-success-toast" role="status">✓ {importNotification}</div>}
     {error && <div className="error-notice">{error} Verifica que el backend esté activo.</div>}
     <section className="metrics-grid">{cards.map(([icon, value, label, path, kind]) => <Link className="metric-card metric-card-link" to={path} key={label} aria-label={`Ver detalle: ${label}`}><span className="metric-icon">{icon}</span><strong className="metric-value">{kind === 'money' ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <AnimatedNumber value={value} />}</strong><span className="metric-label">{label}</span><span className="metric-card-action">Ver detalle <span aria-hidden="true">→</span></span></Link>)}</section>
     <section className="panel">

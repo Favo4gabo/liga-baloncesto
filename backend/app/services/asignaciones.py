@@ -64,6 +64,7 @@ def crear_asignacion(partido_id: int, datos: dict, commit: bool = True) -> Asign
             dias,
             datos.get("medio_transporte"),
             datos.get("viatico_por_dia"),
+            datos.get("hospedaje_total"),
         )
         distancia = distancia_entre(arbitro.ciudad_origen_id, partido.ciudad_juego_id)
         medio = viaticos["medio_externo"] or "local"

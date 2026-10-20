@@ -1,16 +1,37 @@
 import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import CargaExcel from './CargaExcel.jsx'
 import EscanearHorario from './EscanearHorario.jsx'
 
 const acceptedFiles = '.xlsx,.csv,.png,.jpg,.jpeg'
 
 export default function ImportarArchivos() {
+  const navigate = useNavigate()
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [mode, setMode] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [message, setMessage] = useState('')
   const [requestId, setRequestId] = useState(0)
+
+  function volverAlResumen(notification) {
+    navigate('/dashboard', { replace: true, state: { importNotification: notification } })
+  }
+
+  function importarLibroCompleto(resultado) {
+    const labels = {
+      estados: 'estados', ciudades: 'ciudades', tarifas_traslado: 'tarifas de traslado',
+      tarifas_hospedaje: 'tarifas de hospedaje', parametros: 'parámetros',
+      estados_cercanos: 'rutas cercanas', arbitros: 'árbitros', partidos: 'partidos',
+      distancias_ciudades: 'distancias', ubicaciones_cancha: 'canchas', aeropuertos: 'aeropuertos',
+    }
+    const resumen = resultado.insertados_o_actualizados || {}
+    const detalle = Object.entries(resumen)
+      .filter(([, cantidad]) => Number(cantidad) > 0)
+      .map(([clave, cantidad]) => `${cantidad} ${labels[clave] || clave}`)
+      .join(', ')
+    volverAlResumen(`Importación completada correctamente${detalle ? `: ${detalle}` : ''}.`)
+  }
 
   function selectFile(selected) {
     setFile(selected || null)
@@ -68,13 +89,14 @@ export default function ImportarArchivos() {
     {analyzing && <p className="schedule-muted import-analysis-status">Analizando el archivo. Esto puede tardar unos segundos…</p>}
 
     {mode === 'master' && <section className="import-analysis-result" key={`master-${requestId}`}>
-      <CargaExcel embedded initialFile={file} hideUploader autoAnalyze
+      <CargaExcel embedded initialFile={file} hideUploader autoAnalyze onImportComplete={importarLibroCompleto}
         onValidationComplete={() => setAnalyzing(false)}
         onValidationError={fallbackToSchedule} />
     </section>}
     {mode === 'schedule' && <section className="import-analysis-result" key={`schedule-${requestId}`}>
       <EscanearHorario embedded initialFile={file} hideUploader autoAnalyze
         onAnalysisComplete={() => setAnalyzing(false)}
+        onScheduleConfirmed={(resultado) => volverAlResumen(`Horario registrado correctamente: ${resultado.partidos_nuevos} partidos nuevos y ${resultado.asignaciones_nuevas} asignaciones.`)}
         onAnalysisError={() => setAnalyzing(false)} />
     </section>}
   </>

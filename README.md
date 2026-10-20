@@ -220,7 +220,10 @@ directamente sobre tu máquina usando SQLite y el entorno virtual `.venv`:
 
 Cada servicio corre en segundo plano y escribe sus logs en `.run/`. La base de
 datos local es `backend/dev.db`; si existe un `.env` con el `DATABASE_URL` de
-Docker (host `db`) el script lo ignora y avisa por pantalla.
+Docker (host `db`) el script lo ignora y avisa por pantalla. Abre la aplicación
+en `http://127.0.0.1:5173` para mantener el frontend y el backend bajo el mismo
+host IPv4; en Windows, `localhost` puede resolverse a IPv6 aunque Flask escuche
+solo en IPv4.
 
 ## Puesta en marcha
 
@@ -330,6 +333,8 @@ Variables del lector en `.env`:
 | `VISION_PROVIDER=gemini` | Visión multimodal real con la API de Google (Google AI Studio). |
 | `OPENROUTER_API_KEY` | API key privada de OpenRouter (`sk-or-v1-...`); solo se usa en el backend. |
 | `OPENROUTER_MODEL` | Modelo multimodal de OpenRouter; por defecto `google/gemini-2.5-flash`. |
+| `MIGRATION_AI_API_KEY` | Credencial opcional de OpenRouter dedicada a la lectura de horarios; tiene prioridad sobre `OPENROUTER_API_KEY`. |
+| `MIGRATION_AI_MODEL` | Modelo opcional para la lectura de horarios; tiene prioridad sobre `OPENROUTER_MODEL`. Debe admitir la modalidad usada (texto o imagen). |
 | `GEMINI_API_KEY` | API key de Google AI Studio (`AIza...`); solo se usa en el backend. |
 | `GEMINI_MODEL` | Modelo de Gemini; por defecto `gemini-2.5-flash`. |
 

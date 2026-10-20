@@ -1,6 +1,6 @@
 """Cálculos deterministas de logística; nunca asignan importes no configurados."""
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from ..database import db
 from ..models import Arbitro, EstadoCercano, Parametro, Partido, TarifaHospedaje, TarifaTraslado
@@ -38,7 +38,8 @@ def determinar_medio_externo(arbitro: Arbitro, partido: Partido) -> str:
 
 def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noches: int = 1,
                                  cantidad_dias: int = 1, medio_transporte: str | None = None,
-                                 viatico_por_dia: Decimal | float | str | None = None) -> dict[str, float | bool | str]:
+                                 viatico_por_dia: Decimal | float | str | None = None,
+                                 hospedaje_total: Decimal | float | str | None = None) -> dict[str, float | bool | str]:
     """Devuelve el desglose de ida/vuelta aplicando exclusivamente tarifas cargadas."""
     if isinstance(cantidad_noches, bool) or not isinstance(cantidad_noches, int) or cantidad_noches < 0:
         raise ValueError("cantidad_noches debe ser un entero mayor o igual a cero.")
@@ -60,6 +61,15 @@ def calcular_viaticos_asignacion(arbitro_id: int, partido_id: int, cantidad_noch
             raise ValueError("medio_transporte debe ser 'taxi' o 'avion'.")
         medio_externo = medio_transporte or determinar_medio_externo(arbitro, partido)
         externo = _requerir_tarifa("externo", medio_externo) * 2  # ida y vuelta
+    if hospedaje_total is not None:
+        try:
+            estadia = Decimal(str(hospedaje_total))
+        except (InvalidOperation, TypeError, ValueError) as error:
+            raise ValueError("hospedaje_total debe ser un importe numérico no negativo.") from error
+        if not estadia.is_finite() or estadia < 0:
+            raise ValueError("hospedaje_total debe ser un importe numérico no negativo.")
+        costo_hospedaje_por_noche = estadia / cantidad_noches if cantidad_noches else Decimal("0")
+    elif not misma_ciudad and cantidad_noches > 0:
         hotel = TarifaHospedaje.query.filter_by(ciudad_id=partido.ciudad_juego_id).first()
         if hotel is None:
             raise ValueError("Falta configurar la tarifa de hospedaje de la ciudad del partido.")
